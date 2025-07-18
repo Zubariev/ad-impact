@@ -77,6 +77,7 @@ def load_uploaded_files(files: List[io.BytesIO]) -> pd.DataFrame:
         return pd.DataFrame()
     
     unified = pd.concat(frames, ignore_index=True)
+    unified.insert(0, "id", unified.index)
     logger.info(f"Combined {len(frames)} files into {len(unified)} total rows")
     return unified
 
@@ -117,7 +118,7 @@ def detect_column_type(df: pd.DataFrame, column: str) -> str:
         column: Column name to analyze
         
     Returns:
-        Column type: 'datetime', 'numeric', or 'categorical'
+        Column type: 'datetime', 'numeric', 'integer', or 'categorical'
     """
     col_data = df[column].dropna()
     
@@ -138,6 +139,8 @@ def detect_column_type(df: pd.DataFrame, column: str) -> str:
     try:
         col_numeric = pd.to_numeric(col_data, errors='coerce').dropna()
         if len(col_numeric) > len(col_data) * 0.7:
+            if (col_numeric % 1 == 0).all():
+                return 'integer'
             return 'numeric'
     except:
         pass

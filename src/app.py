@@ -61,23 +61,29 @@ def create_range_selector(df: pd.DataFrame, range_col: str, model_name: str) -> 
         df_filtered = df[(df[range_col] >= start_val) & (df[range_col] <= end_val)]
         st.info(f"Date range selected: {start_val.date()} to {end_val.date()}")
         
-    elif col_type == 'numeric':
+    elif col_type in ['numeric', 'integer']:
         # Numeric range selector
-        min_val, max_val = float(col_data.min()), float(col_data.max())
-        st.info(f"Column '{range_col}' range: {min_val:.2f} to {max_val:.2f}")
+        if col_type == 'integer':
+            min_val, max_val = int(col_data.min()), int(col_data.max())
+            step = 1
+        else:
+            min_val, max_val = float(col_data.min()), float(col_data.max())
+            step = (max_val - min_val) / 100 if max_val != min_val else 1.0
+        
+        st.info(f"Column '{range_col}' range: {min_val} to {max_val}")
         
         start_val, end_val = st.slider(
             f"Select Range ({range_col})",
             min_value=min_val,
             max_value=max_val,
             value=(min_val, max_val),
-            step=(max_val - min_val) / 100 if max_val != min_val else 1.0,
+            step=step,
             key=f"range_picker_{model_name}",
         )
         
         df[range_col] = pd.to_numeric(df[range_col], errors='coerce')
         df_filtered = df[(df[range_col] >= start_val) & (df[range_col] <= end_val)]
-        st.info(f"Numeric range selected: {start_val:.2f} to {end_val:.2f}")
+        st.info(f"Numeric range selected: {start_val} to {end_val}")
         
     else:
         # Categorical selector
