@@ -18,7 +18,7 @@ from data_utils import (
     validate_data_for_training,
 )
 from model_training import TRAIN_FUNCTIONS, save_model_and_predictions
-from visualization import display_descriptive_stats, display_model_metrics, display_interpretation_hints
+from visualization import display_descriptive_stats, display_model_metrics, display_interpretation_hints, collect_model_report_data
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -203,23 +203,66 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
             st.plotly_chart(fig, use_container_width=True)
             
             # Download buttons
-            with open(model_path, "rb") as f:
-                st.download_button(
-                    label="📥 Download Trained Model (.pkl)",
-                    data=f,
-                    file_name=f"{model_name}.pkl",
-                    mime="application/octet-stream",
-                    key=f"download_model_{model_name}",
-                )
+            col1, col2, col3 = st.columns(3)
             
-            with open(pred_path, "rb") as f:
-                st.download_button(
-                    label="📊 Download Predictions (.csv)",
-                    data=f,
-                    file_name=f"{model_name}_predictions.csv",
-                    mime="text/csv",
-                    key=f"download_pred_{model_name}",
-                )
+            with col1:
+                with open(model_path, "rb") as f:
+                    st.download_button(
+                        label="📥 Download Trained Model (.pkl)",
+                        data=f,
+                        file_name=f"{model_name}.pkl",
+                        mime="application/octet-stream",
+                        key=f"download_model_{model_name}",
+                    )
+            
+            with col2:
+                with open(pred_path, "rb") as f:
+                    st.download_button(
+                        label="📊 Download Predictions (.csv)",
+                        data=f,
+                        file_name=f"{model_name}_predictions.csv",
+                        mime="text/csv",
+                        key=f"download_pred_{model_name}",
+                    )
+            
+            with col3:
+                # Generate comprehensive JSON report
+                try:
+                    import json
+                    
+                    # Collect range selection info if available
+                    range_selection = {}
+                    if f"range_picker_{model_name}" in st.session_state:
+                        range_selection = {
+                            "range_column": date_col,
+                            "selected_range": str(st.session_state[f"range_picker_{model_name}"])
+                        }
+                    
+                    report_data = collect_model_report_data(
+                        model_name=model_name,
+                        df=df,
+                        date_col=date_col,
+                        target=target,
+                        features=features,
+                        model=model,
+                        predictions=predictions,
+                        range_selection=range_selection
+                    )
+                    
+                    json_str = json.dumps(report_data, indent=2, ensure_ascii=False)
+                    
+                    st.download_button(
+                        label="📋 Download JSON Report",
+                        data=json_str,
+                        file_name=f"{model_name}_comprehensive_report.json",
+                        mime="application/json",
+                        key=f"download_report_{model_name}",
+                        help="Download comprehensive analysis report with all model diagnostics, dataset overview, and results"
+                    )
+                    
+                except Exception as e:
+                    logger.error(f"Error generating JSON report: {str(e)}")
+                    st.error(f"Could not generate JSON report: {str(e)}")
             
             # Display model metrics and interpretation hints
             display_model_metrics(
@@ -232,6 +275,37 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
             )
             
             display_interpretation_hints(model_name)
+            
+            # Information about the JSON report
+            with st.expander("ℹ️ About the JSON Report", expanded=False):
+                st.markdown("""
+                **The comprehensive JSON report includes:**
+                
+                📊 **Dataset Overview**: Total observations, date coverage, missing data summary, descriptive statistics, outlier analysis
+                
+                🔍 **Comprehensive Dataset Analysis**: Detailed column-by-column analysis including:
+                - Numeric columns: mean, median, std, skewness, kurtosis, quartiles, outliers, value distributions
+                - Categorical columns: unique values, most frequent values, string length statistics
+                - Datetime columns: date ranges, unique dates, temporal coverage
+                - Data quality metrics: completeness, missing data patterns, duplicate detection
+                
+                🎯 **Model Configuration**: Selected columns (range, target, features), model parameters, data filtering details
+                
+                📈 **Model Diagnostics**: R², F-statistics, coefficients, p-values, confidence intervals, model-specific metrics
+                
+                🔍 **Variance Inflation Factor (VIF)**: Multicollinearity detection for each feature
+                
+                📉 **Residual Diagnostics**: Residual statistics, fitted vs residual values for model validation
+                
+                🏷️ **Channel Contributions**: Individual feature contributions, time series data, coefficient impacts
+                
+                📋 **Model Predictions**: Full prediction dataset with timestamps and values
+                
+                💡 **Interpretation Hints**: Guidelines for understanding and interpreting the model results
+                
+                This comprehensive report provides enterprise-grade analysis suitable for research, compliance, sharing with stakeholders, or documentation purposes.
+                """)
+            
             
             logger.info(f"{model_name} model trained and displayed successfully")
             

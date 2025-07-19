@@ -134,3 +134,7 @@ saved_predictions/
 *.log
 .DS_Store
 /econ/ 
+
+*.xlsx
+*.csv
+*.json
