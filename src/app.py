@@ -4,10 +4,19 @@ Contains the UI logic and orchestrates the modular components.
 """
 
 import logging
+import sys
+import os
+from pathlib import Path
 from typing import List
 
 import pandas as pd
 import streamlit as st
+
+# Add src directory to Python path for imports
+current_dir = Path(__file__).parent
+src_dir = current_dir
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
 
 from config import MODEL_CONFIGS, MODEL_TABLE, MISSING_DATA_METHODS
 from data_utils import (
@@ -274,6 +283,39 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
                 predictions=predictions,
             )
             
+            # 🔍 ADD MULTICOLLINEARITY ANALYSIS AFTER MODEL TRAINING
+            try:
+                from multicollinearity_streamlit import add_multicollinearity_analysis
+                
+                # Create model results for analysis
+                model_results = {}
+                if hasattr(model, 'score') and predictions is not None:
+                    try:
+                        # Try to calculate R²
+                        X_test = df[features].dropna()
+                        y_test = df.loc[X_test.index, target]
+                        if len(X_test) > 0:
+                            test_score = model.score(X_test, y_test)
+                            model_results['test_r2'] = test_score
+                    except Exception as e:
+                        logger.warning(f"Could not calculate model score: {e}")
+                
+                # Run multicollinearity analysis
+                add_multicollinearity_analysis(
+                    df=df,
+                    target_column=target,
+                    feature_columns=features,
+                    model_name=model_name,
+                    model_results=model_results
+                )
+                
+            except ImportError as e:
+                st.warning(f"⚠️ Multicollinearity analysis not available: {e}")
+                st.info("To enable correlation and overfitting analysis, ensure all analysis modules are properly installed.")
+            except Exception as e:
+                st.error(f"❌ Multicollinearity analysis failed: {e}")
+                st.info("Debug this issue by running the analysis manually or checking the debug panel.")
+            
             display_interpretation_hints(model_name)
             
             # Information about the JSON report
@@ -321,6 +363,31 @@ def main():
     st.set_page_config(page_title="Ad Impact Modeling Dashboard", layout="wide")
     st.title("Ad Impact Modeling Dashboard")
     st.markdown("Upload your supermarket foot-traffic datasets and build attribution models.")
+    
+    # 🔧 DEBUG PANEL for Multicollinearity Analysis
+    with st.expander("🔧 Debug: Multicollinearity Analysis Integration", expanded=False):
+        st.markdown("""
+        **Use this panel to debug multicollinearity analysis integration issues.**
+        
+        If you don't see correlation, multicollinearity, and overfitting analysis after model training,
+        run the debug check below to identify the problem.
+        """)
+        
+        if st.button("🔍 Run Integration Debug Check"):
+            try:
+                from debug_multicollinearity import debug_integration
+                debug_integration()
+            except ImportError:
+                st.error("❌ Debug module not found. Please ensure src/debug_multicollinearity.py exists.")
+            except Exception as e:
+                st.error(f"❌ Debug check failed: {e}")
+                
+        st.markdown("---")
+        st.markdown("**Expected after model training:**")
+        st.markdown("- 🔍 **Multicollinearity Analysis** section")
+        st.markdown("- 📊 **Analysis Summary** with severity metrics") 
+        st.markdown("- 📋 **Tabs**: Alerts, Correlations, Suggestions, Downloads")
+        st.markdown("- 📁 **Download buttons** for analysis reports and optimized datasets")
 
     # Centralized file uploader
     if 'df' not in st.session_state:
