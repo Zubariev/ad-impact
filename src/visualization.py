@@ -47,7 +47,7 @@ def display_descriptive_stats(
         target: Target variable name
         features: Feature variable names
     """
-    with st.expander("📊 Dataset Overview", expanded=False):
+    with st.expander(" Dataset Overview", expanded=False):
         st.markdown(f"**Total observations:** {len(df):,}")
 
         # Date coverage
@@ -127,7 +127,7 @@ def display_mlr_metrics(df: pd.DataFrame, target: str, features: List[str]) -> N
         # Coefficient table with significance indicators
         coef_tbl = model.summary2().tables[1].rename(columns={"Coef.": "Coef"})
         coef_tbl["Signif"] = coef_tbl["P>|t|"].apply(
-            lambda p: "✅" if p < SIGNIFICANCE_LEVEL else "❌"
+            lambda p: "" if p < SIGNIFICANCE_LEVEL else ""
         )
         styled = coef_tbl.style.applymap(
             lambda p: "color:green;" if p < SIGNIFICANCE_LEVEL else "color:red;", 
@@ -185,7 +185,7 @@ def display_distributed_lag_metrics(df: pd.DataFrame, target: str, features: Lis
         X = sm.add_constant(df[features])
         dw = durbin_watson(y - sm.OLS(y, X).fit().fittedvalues)
         
-        dw_status = "✅ No autocorrelation" if DURBIN_WATSON_LOWER <= dw <= DURBIN_WATSON_UPPER else "❌ Autocorrelation detected"
+        dw_status = " No autocorrelation" if DURBIN_WATSON_LOWER <= dw <= DURBIN_WATSON_UPPER else " Autocorrelation detected"
         st.markdown(f"**Durbin-Watson:** {dw:.2f} ({dw_status})")
         
         logger.info("Distributed Lag metrics displayed successfully")
@@ -209,18 +209,35 @@ def display_ml_shap_metrics(model: Any, df: pd.DataFrame, target: str) -> None:
         
         # Calculate prediction metrics
         feature_cols = [c for c in df.columns if c != target]
-        preds = model.predict(df[feature_cols])
+        
+        # Handle categorical columns for prediction
+        X_pred = df[feature_cols].copy()
+        from sklearn.preprocessing import LabelEncoder
+        
+        # Apply same categorical handling as in training
+        for col in feature_cols:
+            if df[col].dtype == 'object' or df[col].dtype.name == 'category':
+                le = LabelEncoder()
+                X_pred[col] = le.fit_transform(X_pred[col].astype(str))
+                if hasattr(model, 'enable_categorical') and model.enable_categorical:
+                    X_pred[col] = X_pred[col].astype('category')
+        
+        preds = model.predict(X_pred)
         rmse = mean_squared_error(df[target], preds, squared=False)
         mae = mean_absolute_error(df[target], preds)
         
         st.markdown(f"**RMSE / MAE:** {rmse:.2f} / {mae:.2f}")
 
         # Global SHAP summary (bar plot)
-        import shap
-        explainer = shap.Explainer(model)
-        shap_values = explainer(df[feature_cols])
-        shap.summary_plot(shap_values, df[feature_cols], show=False, plot_type="bar")
-        st.pyplot(plt.gcf(), clear_figure=True)
+        try:
+            import shap
+            explainer = shap.Explainer(model)
+            shap_values = explainer(X_pred)
+            shap.summary_plot(shap_values, X_pred, show=False, plot_type="bar")
+            st.pyplot(plt.gcf(), clear_figure=True)
+        except Exception as shap_error:
+            st.warning(f"Could not generate SHAP plot: {str(shap_error)}")
+            st.info("SHAP analysis may not be available for all XGBoost configurations with categorical data.")
         
         logger.info("ML + SHAP metrics displayed successfully")
         
@@ -243,7 +260,7 @@ def display_did_metrics(model: Any) -> None:
         ci_low, ci_high = model.conf_int().loc["treated:post"]
         pval = model.pvalues.get("treated:post", float("nan"))
         
-        significance = "✅ Significant" if pval < SIGNIFICANCE_LEVEL else "❌ Not significant"
+        significance = " Significant" if pval < SIGNIFICANCE_LEVEL else " Not significant"
         st.markdown(
             f"**ATE:** {ate:.3f}  |  CI95%: [{ci_low:.3f}, {ci_high:.3f}]  |  p-value: {pval:.3g} ({significance})"
         )
@@ -265,7 +282,7 @@ def display_var_metrics(results: Any) -> None:
     try:
         st.subheader("Model Diagnostics (VAR)")
         
-        stability_status = "✅ Stable" if results.is_stable() else "❌ Unstable"
+        stability_status = " Stable" if results.is_stable() else " Unstable"
         st.markdown(
             f"**Selected Lag Order:** {results.k_ar}  |  **AIC:** {results.aic:.2f}  |  **BIC:** {results.bic:.2f}"
         )
@@ -625,9 +642,20 @@ def collect_model_report_data(
         elif model_name == "ML + SHAP":
             try:
                 from sklearn.metrics import mean_squared_error, mean_absolute_error
+                from sklearn.preprocessing import LabelEncoder
                 
                 feature_cols = [c for c in df.columns if c != target]
-                preds = model.predict(df[feature_cols])
+                
+                # Handle categorical columns for prediction (same as training)
+                X_pred = df[feature_cols].copy()
+                for col in feature_cols:
+                    if df[col].dtype == 'object' or df[col].dtype.name == 'category':
+                        le = LabelEncoder()
+                        X_pred[col] = le.fit_transform(X_pred[col].astype(str))
+                        if hasattr(model, 'enable_categorical') and model.enable_categorical:
+                            X_pred[col] = X_pred[col].astype('category')
+                
+                preds = model.predict(X_pred)
                 
                 report["model_diagnostics"] = {
                     "rmse": float(mean_squared_error(df[target], preds, squared=False)),
@@ -639,7 +667,7 @@ def collect_model_report_data(
                 try:
                     import shap
                     explainer = shap.Explainer(model)
-                    shap_values = explainer(df[feature_cols])
+                    shap_values = explainer(X_pred)
                     
                     # Global feature importance
                     feature_importance = {}
@@ -654,6 +682,7 @@ def collect_model_report_data(
                     
                 except Exception as shap_error:
                     logger.warning(f"Could not compute SHAP values: {str(shap_error)}")
+                    report["shap_analysis_note"] = "SHAP analysis not available for this configuration"
                 
             except Exception as e:
                 logger.error(f"Error collecting ML + SHAP diagnostics: {str(e)}")

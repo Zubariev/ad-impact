@@ -24,30 +24,30 @@ def debug_integration():
     for file_path in files_to_check:
         if os.path.exists(file_path):
             file_size = os.path.getsize(file_path) / 1024  # KB
-            st.success(f"✅ {file_path} exists ({file_size:.1f} KB)")
+            st.success(f" {file_path} exists ({file_size:.1f} KB)")
         else:
-            st.error(f"❌ {file_path} missing")
+            st.error(f" {file_path} missing")
     
     # Check imports
     st.markdown("### 📦 Import Checks")
     
     try:
         from multicollinearity_analysis import MulticollinearityAnalyzer
-        st.success("✅ MulticollinearityAnalyzer imported successfully")
+        st.success(" MulticollinearityAnalyzer imported successfully")
     except ImportError as e:
-        st.error(f"❌ Failed to import MulticollinearityAnalyzer: {e}")
+        st.error(f" Failed to import MulticollinearityAnalyzer: {e}")
     
     try:
         from dashboard_integration import DashboardAnalysisIntegrator
-        st.success("✅ DashboardAnalysisIntegrator imported successfully")
+        st.success(" DashboardAnalysisIntegrator imported successfully")
     except ImportError as e:
-        st.error(f"❌ Failed to import DashboardAnalysisIntegrator: {e}")
+        st.error(f" Failed to import DashboardAnalysisIntegrator: {e}")
     
     try:
         from multicollinearity_streamlit import add_multicollinearity_analysis
-        st.success("✅ Streamlit integration imported successfully")
+        st.success(" Streamlit integration imported successfully")
     except ImportError as e:
-        st.error(f"❌ Failed to import Streamlit integration: {e}")
+        st.error(f" Failed to import Streamlit integration: {e}")
     
     # Check current working directory
     st.markdown("### 📂 Working Directory")
@@ -70,14 +70,14 @@ def debug_integration():
     for package in required_packages:
         try:
             __import__(package)
-            st.success(f"✅ {package} available")
+            st.success(f" {package} available")
         except ImportError:
-            st.error(f"❌ {package} missing")
+            st.error(f" {package} missing")
     
     # Test basic functionality
     st.markdown("### 🧪 Quick Functionality Test")
     
-    if st.button("🚀 Run Quick Test"):
+    if st.button(" Run Quick Test"):
         try:
             import pandas as pd
             import numpy as np
@@ -102,10 +102,10 @@ def debug_integration():
             st.write("Correlation matrix:")
             st.dataframe(correlation.round(3))
             
-            st.success("✅ Basic functionality test passed!")
+            st.success(" Basic functionality test passed!")
             
         except Exception as e:
-            st.error(f"❌ Quick test failed: {e}")
+            st.error(f" Quick test failed: {e}")
 
 if __name__ == "__main__":
     debug_integration()

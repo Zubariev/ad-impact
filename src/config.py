@@ -17,17 +17,17 @@ MODEL_TABLE = [
     {
         "name": "MLR",
         "chart": "Stacked Area Chart",
-        "variables_allowed": (5, 50),
+        "variables_allowed": (1, 50),
     },
     {
         "name": "Distributed Lag",
         "chart": "Stacked Area Chart (with lags)",
-        "variables_allowed": (5, 20),
+        "variables_allowed": (1, 20),
     },
     {
         "name": "ML + SHAP",
         "chart": "Stacked Area Chart (from SHAP)",
-        "variables_allowed": (10, 500),
+        "variables_allowed": (1, 500),
     },
     {
         "name": "DiD",
@@ -37,7 +37,7 @@ MODEL_TABLE = [
     {
         "name": "VAR",
         "chart": "IRF Line Plot / Cumulative Bar Chart",
-        "variables_allowed": (2, 6),
+        "variables_allowed": (1, 6),
     },
     {
         "name": "Synthetic Control",

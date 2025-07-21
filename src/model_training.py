@@ -170,16 +170,41 @@ def train_ml_shap(
     try:
         import xgboost as xgb
         import shap
+        from sklearn.preprocessing import LabelEncoder
         
-        X = df[features]
+        X = df[features].copy()
         y = df[target]
+        
+        # Handle categorical columns
+        categorical_cols = []
+        label_encoders = {}
+        
+        for col in features:
+            if df[col].dtype == 'object' or df[col].dtype.name == 'category':
+                categorical_cols.append(col)
+                le = LabelEncoder()
+                X[col] = le.fit_transform(X[col].astype(str))
+                label_encoders[col] = le
         
         # Get hyperparameters
         params = MODEL_HYPERPARAMS["ML + SHAP"]
-        model = xgb.XGBRegressor(
-            n_estimators=params["n_estimators"],
-            learning_rate=params["learning_rate"]
-        )
+        
+        # Configure XGBoost with categorical support if needed
+        if categorical_cols:
+            model = xgb.XGBRegressor(
+                n_estimators=params["n_estimators"],
+                learning_rate=params["learning_rate"],
+                enable_categorical=True
+            )
+            # Convert categorical columns to category dtype for XGBoost
+            for col in categorical_cols:
+                X[col] = X[col].astype('category')
+        else:
+            model = xgb.XGBRegressor(
+                n_estimators=params["n_estimators"],
+                learning_rate=params["learning_rate"]
+            )
+        
         model.fit(X, y)
         
         # Create SHAP explainer and values
@@ -204,7 +229,7 @@ def train_ml_shap(
             "prediction": model.predict(X)
         })
         
-        logger.info(f"ML + SHAP model trained successfully with {len(features)} features")
+        logger.info(f"ML + SHAP model trained successfully with {len(features)} features ({len(categorical_cols)} categorical)")
         return model, predictions, fig
         
     except Exception as e:
@@ -233,7 +258,26 @@ def train_did(
     """
     try:
         if "treated" not in df.columns or "post" not in df.columns:
-            raise ValueError("DiD requires 'treated' and 'post' indicator columns in the dataset.")
+            # Provide suggestions for creating these columns
+            available_cols = list(df.columns)
+            error_msg = (
+                "DiD requires 'treated' and 'post' indicator columns in the dataset.\n\n"
+                "To use DiD analysis, you need to create these columns:\n"
+                "• 'treated': Binary indicator (0/1) for treatment vs control groups\n"
+                "• 'post': Binary indicator (0/1) for pre vs post treatment periods\n\n"
+                f"Available columns in your dataset: {available_cols}\n\n"
+                "Suggestions:\n"
+                "• If you have a city/location column, you could create 'treated' based on specific cities\n"
+                "• If you have a time column, you could create 'post' based on a specific date cutoff\n"
+                "• Use the data preparation utilities to add these columns before training"
+            )
+            raise ValueError(error_msg)
+        
+        # Validate that treated and post are binary
+        if not df['treated'].isin([0, 1]).all():
+            raise ValueError("'treated' column must contain only 0 and 1 values")
+        if not df['post'].isin([0, 1]).all():
+            raise ValueError("'post' column must contain only 0 and 1 values")
         
         formula = f"{target} ~ treated * post + " + " + ".join(features)
         model = smf.ols(formula, data=df).fit()
@@ -352,20 +396,59 @@ def train_synthetic_control(
     """
     try:
         if "treated" not in df.columns:
-            raise ValueError("Synthetic Control requires a 'treated' column.")
+            available_cols = list(df.columns)
+            error_msg = (
+                "Synthetic Control requires a 'treated' column.\n\n"
+                "To use Synthetic Control analysis, you need to create a 'treated' column:\n"
+                "• Binary indicator (0/1) where 1 = treated unit, 0 = control units\n"
+                "• Typically only one or few units should be treated (treated=1)\n"
+                "• Most units should be controls (treated=0) to create the synthetic control\n\n"
+                f"Available columns in your dataset: {available_cols}\n\n"
+                "Suggestions:\n"
+                "• If you have a city/location column, create 'treated' based on the specific location of interest\n"
+                "• Use the data preparation utilities to add this column before training"
+            )
+            raise ValueError(error_msg)
+        
+        # Validate that treated is binary
+        if not df['treated'].isin([0, 1]).all():
+            raise ValueError("'treated' column must contain only 0 and 1 values")
+        
+        # Check if we have both treated and control units
+        treated_count = df['treated'].sum()
+        control_count = (df['treated'] == 0).sum()
+        
+        if treated_count == 0:
+            raise ValueError("No treated units found (all 'treated' values are 0)")
+        if control_count == 0:
+            raise ValueError("No control units found (all 'treated' values are 1)")
         
         treated = df[df["treated"] == 1]
         control = df[df["treated"] == 0]
         
+        if len(control) < len(features):
+            raise ValueError(f"Not enough control units ({len(control)}) for the number of features ({len(features)})")
+        
         # Fit weights using linear regression
         weights = LinearRegression().fit(control[features], control[target]).coef_
-        synthetic = (control[features] * weights).sum(axis=1) / weights.sum()
+        
+        # Create synthetic control for all periods
+        synthetic_values = []
+        for idx in df.index:
+            if df.loc[idx, 'treated'] == 0:
+                # For control units, use actual values
+                synthetic_values.append(df.loc[idx, target])
+            else:
+                # For treated units, compute synthetic value
+                feature_values = df.loc[idx, features].values
+                synthetic_val = np.dot(feature_values, weights)
+                synthetic_values.append(synthetic_val)
         
         # Create comparison DataFrame
         comp_df = pd.DataFrame({
             date_col: df[date_col],
             "Actual": df[target],
-            "Synthetic": synthetic,
+            "Synthetic": synthetic_values,
         })
         
         # Create visualization
@@ -378,9 +461,9 @@ def train_synthetic_control(
         
         # Create predictions DataFrame
         predictions = comp_df
-        model = {"weights": weights}
+        model = {"weights": weights, "treated_count": treated_count, "control_count": control_count}
         
-        logger.info("Synthetic Control model trained successfully")
+        logger.info(f"Synthetic Control model trained successfully ({treated_count} treated, {control_count} control units)")
         return model, predictions, fig
         
     except Exception as e:
@@ -458,7 +541,32 @@ def train_psm(
     """
     try:
         if "treated" not in df.columns:
-            raise ValueError("PSM requires a 'treated' column in the dataset.")
+            available_cols = list(df.columns)
+            error_msg = (
+                "PSM requires a 'treated' column in the dataset.\n\n"
+                "To use Propensity Score Matching, you need to create a 'treated' column:\n"
+                "• Binary indicator (0/1) for treatment vs control groups\n"
+                "• Should have reasonable balance between treated and control groups\n\n"
+                f"Available columns in your dataset: {available_cols}\n\n"
+                "Suggestions:\n"
+                "• If you have a city/location column, create 'treated' based on specific cities\n"
+                "• If you have a time-based intervention, create based on before/after periods\n"
+                "• Use the data preparation utilities to add this column before training"
+            )
+            raise ValueError(error_msg)
+        
+        # Validate that treated is binary
+        if not df['treated'].isin([0, 1]).all():
+            raise ValueError("'treated' column must contain only 0 and 1 values")
+        
+        # Check balance
+        treated_count = df['treated'].sum()
+        control_count = (df['treated'] == 0).sum()
+        
+        if treated_count == 0:
+            raise ValueError("No treated units found (all 'treated' values are 0)")
+        if control_count == 0:
+            raise ValueError("No control units found (all 'treated' values are 1)")
         
         X = df[features]
         scaler = StandardScaler()
@@ -488,9 +596,15 @@ def train_psm(
             "ATT": att
         })
         
-        model = {"scaler": scaler, "logits": logits}
+        model = {
+            "scaler": scaler, 
+            "logits": logits,
+            "treated_count": treated_count,
+            "control_count": control_count,
+            "att": att
+        }
         
-        logger.info("PSM model trained successfully")
+        logger.info(f"PSM model trained successfully ({treated_count} treated, {control_count} control units)")
         return model, predictions, fig
         
     except Exception as e:

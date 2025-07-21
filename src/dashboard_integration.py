@@ -95,7 +95,7 @@ class DashboardAnalysisIntegrator:
         # Generate interactive visualizations
         self.visualizations = self._generate_dashboard_visualizations()
         
-        print("✅ Dashboard analysis completed successfully!")
+        print(" Dashboard analysis completed successfully!")
         
         return self.dashboard_data
     
@@ -902,7 +902,7 @@ class DashboardAnalysisIntegrator:
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(export_data, f, indent=2, ensure_ascii=False)
         
-        print(f"✅ Comprehensive dashboard report exported successfully!")
+        print(f" Comprehensive dashboard report exported successfully!")
         
     def get_dashboard_summary(self) -> Dict[str, Any]:
         """Get concise summary for dashboard header display."""

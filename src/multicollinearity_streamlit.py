@@ -58,10 +58,10 @@ def add_multicollinearity_analysis(
             analysis_df.to_csv(temp_file.name, index=False)
             temp_data_path = temp_file.name
         
-        st.success(f"✅ Temporary analysis file created: {len(analysis_df)} rows, {len(analysis_columns)} columns")
+        st.success(f" Temporary analysis file created: {len(analysis_df)} rows, {len(analysis_columns)} columns")
         
     except Exception as e:
-        st.error(f"❌ Failed to create analysis dataset: {e}")
+        st.error(f" Failed to create analysis dataset: {e}")
         return
     
     # Create analysis section
@@ -70,7 +70,7 @@ def add_multicollinearity_analysis(
     st.caption(f"Automatic analysis triggered after {model_name} training completion")
     
     # Analysis toggle
-    if st.checkbox("🚀 Run Multicollinearity Analysis", value=True, key=f"analysis_toggle_{model_name}"):
+    if st.checkbox(" Run Multicollinearity Analysis", value=True, key=f"analysis_toggle_{model_name}"):
         
         # Run analysis with progress indicator
         with st.spinner("Running comprehensive multicollinearity analysis..."):
@@ -105,13 +105,13 @@ def add_multicollinearity_analysis(
                 report_path = f"multicollinearity_analysis_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
                 integrator.export_comprehensive_json(report_path)
                 
-                st.success("✅ Multicollinearity analysis completed successfully!")
+                st.success(" Multicollinearity analysis completed successfully!")
                 
                 # Display results
                 _display_analysis_results(dashboard_data, integrator, model_name, report_path)
                 
             except Exception as e:
-                st.error(f"❌ Analysis failed: {str(e)}")
+                st.error(f" Analysis failed: {str(e)}")
                 st.write("**Debug Info:**")
                 st.write(f"- Temp file exists: {os.path.exists(temp_data_path)}")
                 st.write(f"- Target column in data: {target_column in df.columns}")
@@ -133,7 +133,7 @@ def _display_analysis_results(dashboard_data: Dict, integrator: DashboardAnalysi
     insights = dashboard_data.get('multicollinearity_insights', {})
     
     # Display severity header
-    st.markdown("### 📊 Analysis Summary")
+    st.markdown("###  Analysis Summary")
     
     # Severity indicator
     severity = summary.get('severity', 'unknown')
@@ -188,7 +188,7 @@ def _display_alerts_tab(dashboard_data: Dict) -> None:
     alerts = dashboard_data.get('dashboard_alerts', [])
     
     if not alerts:
-        st.success("✅ No critical multicollinearity issues detected!")
+        st.success(" No critical multicollinearity issues detected!")
         return
     
     st.markdown("### ⚠️ Critical Issues Detected")
@@ -204,7 +204,7 @@ def _display_alerts_tab(dashboard_data: Dict) -> None:
                 st.info(f"**Recommended Action:** {alert.get('suggested_action')}")
                 
                 if st.button(f"Mark as Acknowledged", key=f"alert_ack_{i}"):
-                    st.success("✅ Alert acknowledged!")
+                    st.success(" Alert acknowledged!")
 
 
 def _display_correlations_tab(dashboard_data: Dict, integrator: DashboardAnalysisIntegrator) -> None:
@@ -213,7 +213,7 @@ def _display_correlations_tab(dashboard_data: Dict, integrator: DashboardAnalysi
     correlation_data = dashboard_data.get('correlation_analysis', {})
     
     if correlation_data.get('status') == 'no_high_correlations':
-        st.success("✅ No problematic correlations detected!")
+        st.success(" No problematic correlations detected!")
         return
     
     # Show correlation summary
@@ -232,7 +232,7 @@ def _display_correlations_tab(dashboard_data: Dict, integrator: DashboardAnalysi
     # Show interactive heatmap if available
     try:
         if hasattr(integrator, 'visualizations') and integrator.visualizations.get('correlation_heatmap'):
-            st.markdown("### 📊 Interactive Correlation Heatmap")
+            st.markdown("###  Interactive Correlation Heatmap")
             heatmap_json = integrator.visualizations['correlation_heatmap']
             if heatmap_json:
                 st.plotly_chart(
@@ -289,8 +289,8 @@ def _display_suggestions_tab(dashboard_data: Dict, model_name: str) -> None:
                     if len(action['variables']) > 20:
                         st.info(f"... and {len(action['variables']) - 20} more variables")
                 
-                if st.button(f"✅ Apply {action.get('action')}", key=f"apply_action_{i}"):
-                    st.success(f"✅ {action.get('action')} marked for implementation!")
+                if st.button(f" Apply {action.get('action')}", key=f"apply_action_{i}"):
+                    st.success(f" {action.get('action')} marked for implementation!")
                     st.balloons()
     
     # Model-specific recommendations
@@ -331,7 +331,7 @@ model.fit(X, y)
             st.markdown("#### 📋 Other Model Recommendations")
             
             for model_type, updates in other_models.items():
-                with st.expander(f"📊 {model_type.replace('_', ' ')} Model"):
+                with st.expander(f" {model_type.replace('_', ' ')} Model"):
                     st.write(f"**Recommended Features:** {len(updates.get('recommended_features', []))}")
                     st.write(f"**Suggested Changes:** {updates.get('suggested_changes')}")
 
@@ -344,7 +344,7 @@ def _display_downloads_tab(integrator: DashboardAnalysisIntegrator, report_path:
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("#### 📊 Analysis Reports")
+        st.markdown("####  Analysis Reports")
         
         # Comprehensive JSON report
         if os.path.exists(report_path):

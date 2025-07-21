@@ -5,7 +5,7 @@ Handles file ingestion, data cleaning, and preprocessing operations.
 
 import io
 import logging
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Dict
 
 import pandas as pd
 import streamlit as st
@@ -229,7 +229,246 @@ def handle_missing_data(
     return df_processed
 
 
-def validate_data_for_training(df: pd.DataFrame, target: str, features: List[str]) -> bool:
+def create_treated_column_by_location(
+    df: pd.DataFrame, 
+    location_col: str, 
+    treated_locations: List[str]
+) -> pd.DataFrame:
+    """
+    Create a 'treated' column based on specific locations.
+    
+    Args:
+        df: Input DataFrame
+        location_col: Name of the location/city column
+        treated_locations: List of location names to mark as treated
+        
+    Returns:
+        DataFrame with 'treated' column added
+    """
+    df_new = df.copy()
+    df_new['treated'] = (df_new[location_col].isin(treated_locations)).astype(int)
+    
+    treated_count = df_new['treated'].sum()
+    control_count = (df_new['treated'] == 0).sum()
+    
+    logger.info(f"Created 'treated' column: {treated_count} treated, {control_count} control observations")
+    return df_new
+
+
+def create_post_column_by_date(
+    df: pd.DataFrame, 
+    date_col: str, 
+    cutoff_date: Union[str, pd.Timestamp]
+) -> pd.DataFrame:
+    """
+    Create a 'post' column based on a date cutoff.
+    
+    Args:
+        df: Input DataFrame
+        date_col: Name of the date column
+        cutoff_date: Date cutoff (observations after this are marked as post=1)
+        
+    Returns:
+        DataFrame with 'post' column added
+    """
+    df_new = df.copy()
+    
+    # Convert cutoff_date to pandas datetime if it's a string
+    if isinstance(cutoff_date, str):
+        cutoff_date = pd.to_datetime(cutoff_date)
+    
+    # Ensure date column is datetime
+    if not pd.api.types.is_datetime64_any_dtype(df_new[date_col]):
+        df_new[date_col] = pd.to_datetime(df_new[date_col])
+    
+    df_new['post'] = (df_new[date_col] > cutoff_date).astype(int)
+    
+    pre_count = (df_new['post'] == 0).sum()
+    post_count = df_new['post'].sum()
+    
+    logger.info(f"Created 'post' column with cutoff {cutoff_date}: {pre_count} pre, {post_count} post observations")
+    return df_new
+
+
+def create_post_column_by_period(
+    df: pd.DataFrame, 
+    period_col: str, 
+    cutoff_value: Union[int, float, str]
+) -> pd.DataFrame:
+    """
+    Create a 'post' column based on a period cutoff (e.g., week, month, year).
+    
+    Args:
+        df: Input DataFrame
+        period_col: Name of the period column (e.g., 'Week', 'Month', 'Year')
+        cutoff_value: Period cutoff (observations after this are marked as post=1)
+        
+    Returns:
+        DataFrame with 'post' column added
+    """
+    df_new = df.copy()
+    df_new['post'] = (df_new[period_col] > cutoff_value).astype(int)
+    
+    pre_count = (df_new['post'] == 0).sum()
+    post_count = df_new['post'].sum()
+    
+    logger.info(f"Created 'post' column with cutoff {cutoff_value}: {pre_count} pre, {post_count} post observations")
+    return df_new
+
+
+def create_treated_column_by_quantile(
+    df: pd.DataFrame, 
+    metric_col: str, 
+    quantile: float = 0.5,
+    above_threshold: bool = True
+) -> pd.DataFrame:
+    """
+    Create a 'treated' column based on a quantile threshold of some metric.
+    
+    Args:
+        df: Input DataFrame
+        metric_col: Column to use for threshold calculation
+        quantile: Quantile threshold (0.0 to 1.0)
+        above_threshold: If True, values above threshold are treated; if False, below
+        
+    Returns:
+        DataFrame with 'treated' column added
+    """
+    df_new = df.copy()
+    threshold = df_new[metric_col].quantile(quantile)
+    
+    if above_threshold:
+        df_new['treated'] = (df_new[metric_col] > threshold).astype(int)
+    else:
+        df_new['treated'] = (df_new[metric_col] <= threshold).astype(int)
+    
+    treated_count = df_new['treated'].sum()
+    control_count = (df_new['treated'] == 0).sum()
+    
+    direction = "above" if above_threshold else "below"
+    logger.info(f"Created 'treated' column ({direction} {quantile} quantile = {threshold:.2f}): {treated_count} treated, {control_count} control")
+    return df_new
+
+
+def prepare_did_data(
+    df: pd.DataFrame,
+    location_col: str,
+    treated_locations: List[str],
+    date_col: str,
+    cutoff_date: Union[str, pd.Timestamp]
+) -> pd.DataFrame:
+    """
+    Prepare data for Difference-in-Differences analysis.
+    
+    Args:
+        df: Input DataFrame
+        location_col: Name of the location/city column
+        treated_locations: List of location names to mark as treated
+        date_col: Name of the date column
+        cutoff_date: Date cutoff for pre/post periods
+        
+    Returns:
+        DataFrame ready for DiD analysis with 'treated' and 'post' columns
+    """
+    logger.info("Preparing data for DiD analysis...")
+    
+    # Create treated column
+    df_prepared = create_treated_column_by_location(df, location_col, treated_locations)
+    
+    # Create post column
+    df_prepared = create_post_column_by_date(df_prepared, date_col, cutoff_date)
+    
+    # Validate the 2x2 design
+    crosstab = pd.crosstab(df_prepared['treated'], df_prepared['post'], margins=True)
+    logger.info(f"DiD 2x2 design:\n{crosstab}")
+    
+    # Check for sufficient observations in each cell
+    min_obs_per_cell = 5
+    for treated in [0, 1]:
+        for post in [0, 1]:
+            cell_count = ((df_prepared['treated'] == treated) & (df_prepared['post'] == post)).sum()
+            if cell_count < min_obs_per_cell:
+                logger.warning(f"Low observations in treated={treated}, post={post} cell: {cell_count}")
+    
+    return df_prepared
+
+
+def prepare_synthetic_control_data(
+    df: pd.DataFrame,
+    location_col: str,
+    treated_location: str
+) -> pd.DataFrame:
+    """
+    Prepare data for Synthetic Control analysis.
+    
+    Args:
+        df: Input DataFrame
+        location_col: Name of the location/city column
+        treated_location: Single location name to mark as treated
+        
+    Returns:
+        DataFrame ready for Synthetic Control with 'treated' column
+    """
+    logger.info("Preparing data for Synthetic Control analysis...")
+    
+    df_prepared = create_treated_column_by_location(df, location_col, [treated_location])
+    
+    treated_count = df_prepared['treated'].sum()
+    control_count = (df_prepared['treated'] == 0).sum()
+    
+    if treated_count == 0:
+        raise ValueError(f"No observations found for treated location: {treated_location}")
+    if control_count < 10:
+        logger.warning(f"Few control observations ({control_count}) for synthetic control")
+    
+    logger.info(f"Synthetic Control setup: 1 treated location ({treated_location}), {len(df_prepared[location_col].unique())-1} control locations")
+    
+    return df_prepared
+
+
+def suggest_model_data_requirements(df: pd.DataFrame) -> Dict[str, str]:
+    """
+    Analyze dataset and suggest how to prepare it for different models.
+    
+    Args:
+        df: Input DataFrame
+        
+    Returns:
+        Dictionary with suggestions for each model type
+    """
+    suggestions = {}
+    cols = list(df.columns)
+    
+    # Look for location/geographic columns
+    location_cols = [col for col in cols if any(keyword in col.lower() 
+                    for keyword in ['city', 'location', 'region', 'state', 'country', 'store', 'unit'])]
+    
+    # Look for time-related columns
+    time_cols = [col for col in cols if any(keyword in col.lower() 
+                for keyword in ['date', 'time', 'week', 'month', 'year', 'period'])]
+    
+    # Base models that work with any numeric data
+    suggestions["MLR"] = "✅ Ready - just select numeric features"
+    suggestions["Distributed Lag"] = "✅ Ready - works with time series features"
+    suggestions["ML + SHAP"] = "✅ Ready - handles both numeric and categorical features"
+    suggestions["VAR"] = "✅ Ready - good for time series with multiple variables"
+    suggestions["CausalImpact"] = "✅ Ready - works with time series data"
+    
+    # Advanced models requiring special columns
+    if location_cols:
+        suggestions["DiD"] = f"📋 Add 'treated' (based on {location_cols}) and 'post' (based on {time_cols if time_cols else 'time cutoff'}) columns"
+        suggestions["Synthetic Control"] = f"📋 Add 'treated' column (pick 1 treated from {location_cols})"
+        suggestions["PSM"] = f"📋 Add 'treated' column (based on {location_cols} or intervention logic)"
+    else:
+        suggestions["DiD"] = " Need location/unit identifier to create treatment groups"
+        suggestions["Synthetic Control"] = " Need location/unit identifier to define treated vs control"
+        suggestions["PSM"] = " Need intervention/treatment indicator column"
+    
+    return suggestions
+
+
+# Update the existing validate_data_for_training function
+def validate_data_for_training(df: pd.DataFrame, target: str, features: List[str], model_name: str = None) -> bool:
     """
     Validate that data is suitable for model training.
     
@@ -237,6 +476,7 @@ def validate_data_for_training(df: pd.DataFrame, target: str, features: List[str
         df: Input DataFrame
         target: Target variable name
         features: Feature variable names
+        model_name: Name of the model (optional, for model-specific validation)
         
     Returns:
         True if data is valid for training, False otherwise
@@ -254,6 +494,16 @@ def validate_data_for_training(df: pd.DataFrame, target: str, features: List[str
         logger.error(error_msg)
         st.error(error_msg)
         return False
+    
+    # Model-specific validation
+    if model_name in ["DiD"]:
+        if "treated" not in df.columns or "post" not in df.columns:
+            st.error("DiD model requires 'treated' and 'post' columns. Use data preparation utilities to create them.")
+            return False
+    elif model_name in ["Synthetic Control", "PSM"]:
+        if "treated" not in df.columns:
+            st.error(f"{model_name} model requires 'treated' column. Use data preparation utilities to create it.")
+            return False
     
     return True
 
