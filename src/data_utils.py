@@ -448,21 +448,21 @@ def suggest_model_data_requirements(df: pd.DataFrame) -> Dict[str, str]:
                 for keyword in ['date', 'time', 'week', 'month', 'year', 'period'])]
     
     # Base models that work with any numeric data
-    suggestions["MLR"] = "✅ Ready - just select numeric features"
-    suggestions["Distributed Lag"] = "✅ Ready - works with time series features"
-    suggestions["ML + SHAP"] = "✅ Ready - handles both numeric and categorical features"
-    suggestions["VAR"] = "✅ Ready - good for time series with multiple variables"
-    suggestions["CausalImpact"] = "✅ Ready - works with time series data"
+    suggestions["MLR"] = "Ready - just select numeric features"
+    suggestions["Distributed Lag"] = "Ready - works with time series features"
+    suggestions["ML + SHAP"] = "Ready - handles both numeric and categorical features"
+    suggestions["VAR"] = "Ready - good for time series with multiple variables"
+    suggestions["CausalImpact"] = "Ready - works with time series data"
     
     # Advanced models requiring special columns
     if location_cols:
-        suggestions["DiD"] = f"📋 Add 'treated' (based on {location_cols}) and 'post' (based on {time_cols if time_cols else 'time cutoff'}) columns"
-        suggestions["Synthetic Control"] = f"📋 Add 'treated' column (pick 1 treated from {location_cols})"
-        suggestions["PSM"] = f"📋 Add 'treated' column (based on {location_cols} or intervention logic)"
+        suggestions["DiD"] = f"Add 'treated' (based on {location_cols}) and 'post' (based on {time_cols if time_cols else 'time cutoff'}) columns"
+        suggestions["Synthetic Control"] = f"Add 'treated' column (pick 1 treated from {location_cols})"
+        suggestions["PSM"] = f"Add 'treated' column (based on {location_cols} or intervention logic)"
     else:
-        suggestions["DiD"] = " Need location/unit identifier to create treatment groups"
-        suggestions["Synthetic Control"] = " Need location/unit identifier to define treated vs control"
-        suggestions["PSM"] = " Need intervention/treatment indicator column"
+        suggestions["DiD"] = "Need location/unit identifier to create treatment groups"
+        suggestions["Synthetic Control"] = "Need location/unit identifier to define treated vs control"
+        suggestions["PSM"] = "Need intervention/treatment indicator column"
     
     return suggestions
 
@@ -499,10 +499,12 @@ def validate_data_for_training(df: pd.DataFrame, target: str, features: List[str
     if model_name in ["DiD"]:
         if "treated" not in df.columns or "post" not in df.columns:
             st.error("DiD model requires 'treated' and 'post' columns. Use data preparation utilities to create them.")
+            st.info("💡 Go to 'Data Preparation for Advanced Models' section above to create these columns.")
             return False
     elif model_name in ["Synthetic Control", "PSM"]:
         if "treated" not in df.columns:
-            st.error(f"{model_name} model requires 'treated' column. Use data preparation utilities to create it.")
+            st.error(f" {model_name} model requires 'treated' column. Use data preparation utilities to create it.")
+            st.info("💡 Go to 'Data Preparation for Advanced Models' section above to create this column.")
             return False
     
     return True

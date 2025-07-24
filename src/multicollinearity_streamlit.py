@@ -267,10 +267,10 @@ def _display_suggestions_tab(dashboard_data: Dict, model_name: str) -> None:
     # Immediate actions
     immediate_actions = suggestions.get('immediate_actions', [])
     if immediate_actions:
-        st.markdown("### 🚨 Immediate Actions Required")
+        st.markdown("### Immediate Actions Required")
         
         for i, action in enumerate(immediate_actions):
-            with st.expander(f"🔥 Priority {i+1}: {action.get('action')}", expanded=i == 0):
+            with st.expander(f"Priority {i+1}: {action.get('action')}", expanded=i == 0):
                 st.write(f"**Description:** {action.get('description')}")
                 st.write(f"**Expected Impact:** {action.get('expected_impact')}")
                 st.write(f"**Priority:** {action.get('priority', 'medium').upper()}")
@@ -296,12 +296,12 @@ def _display_suggestions_tab(dashboard_data: Dict, model_name: str) -> None:
     # Model-specific recommendations
     model_updates = suggestions.get('dashboard_model_updates', {})
     if model_updates:
-        st.markdown("### 🔧 Model-Specific Recommendations")
+        st.markdown("### Model-Specific Recommendations")
         
         # Highlight current model
         if model_name in model_updates:
             current_model = model_updates[model_name]
-            st.markdown(f"#### 🎯 Current Model ({model_name}) Recommendations")
+            st.markdown(f"#### Current Model ({model_name}) Recommendations")
             
             with st.container():
                 st.info(f"**Suggested Changes:** {current_model.get('suggested_changes', 'No specific changes recommended')}")
@@ -328,7 +328,7 @@ model.fit(X, y)
         # Other model recommendations
         other_models = {k: v for k, v in model_updates.items() if k != model_name}
         if other_models:
-            st.markdown("#### 📋 Other Model Recommendations")
+            st.markdown("#### Other Model Recommendations")
             
             for model_type, updates in other_models.items():
                 with st.expander(f" {model_type.replace('_', ' ')} Model"):

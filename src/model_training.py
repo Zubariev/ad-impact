@@ -207,6 +207,11 @@ def train_ml_shap(
         
         model.fit(X, y)
         
+        # Store preprocessing info with the model
+        model.label_encoders_ = label_encoders
+        model.categorical_cols_ = categorical_cols
+        model.feature_names_ = features
+        
         # Create SHAP explainer and values
         explainer = shap.Explainer(model)
         shap_values = explainer(X)
