@@ -8,6 +8,10 @@ import sys
 import os
 from pathlib import Path
 from typing import List, Any, Dict
+import tempfile
+import io
+import json
+from datetime import datetime
 
 import pandas as pd
 import streamlit as st
@@ -36,6 +40,7 @@ from data_utils import (
 )
 from model_training import TRAIN_FUNCTIONS, save_model_and_predictions
 from visualization import display_descriptive_stats, display_model_metrics, display_interpretation_hints, collect_model_report_data
+from combine_reports import combine_uploaded_files
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -851,6 +856,162 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
         st.error("Please check your data and feature selection.")
 
 
+def create_combine_reports_tab():
+    """Create the Combine Reports tab functionality."""
+    st.header("📊 Combine Reports & Predictions")
+    st.markdown("Upload your model reports and prediction files to create a comprehensive combined JSON report.")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("📋 Upload Analysis Reports")
+        st.markdown("Upload JSON files containing model analysis reports:")
+        
+        json_files = st.file_uploader(
+            "Select JSON Report Files",
+            type=['json'],
+            accept_multiple_files=True,
+            key="json_reports_uploader",
+            help="Upload multicollinearity analysis files and other model reports"
+        )
+        
+        if json_files:
+            st.success(f"✅ {len(json_files)} JSON files uploaded:")
+            for f in json_files:
+                st.write(f"• {f.name}")
+    
+    with col2:
+        st.subheader("📈 Upload Prediction Files")
+        st.markdown("Upload CSV files containing model predictions:")
+        
+        prediction_files = st.file_uploader(
+            "Select Prediction CSV Files",
+            type=['csv'],
+            accept_multiple_files=True,
+            key="predictions_uploader",
+            help="Upload prediction CSV files from saved_predictions folder"
+        )
+        
+        if prediction_files:
+            st.success(f"✅ {len(prediction_files)} prediction files uploaded:")
+            for f in prediction_files:
+                st.write(f"• {f.name}")
+    
+    # Combine and process files
+    if json_files or prediction_files:
+        st.markdown("---")
+        
+        if st.button("🔄 Combine Reports", type="primary", use_container_width=True):
+            with st.spinner("Combining reports and predictions..."):
+                try:
+                    combined_report = combine_uploaded_files(json_files or [], prediction_files or [])
+                    
+                    if combined_report:
+                        st.success("✅ Reports combined successfully!")
+                        
+                        # Display summary
+                        st.subheader("📊 Combined Report Summary")
+                        
+                        metadata = combined_report.get("combined_report_metadata", {})
+                        
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("Total Models", metadata.get("total_models", 0))
+                        with col2:
+                            st.metric("Prediction Sets", metadata.get("total_prediction_sets", 0))
+                        with col3:
+                            st.metric("Report Sections", len(combined_report.get("models", {})))
+                        with col4:
+                            file_size_mb = len(json.dumps(combined_report).encode('utf-8')) / (1024 * 1024)
+                            st.metric("File Size (MB)", f"{file_size_mb:.2f}")
+                        
+                        # Show included models
+                        if metadata.get("combined_from"):
+                            st.write("**📋 Analysis Reports Included:**")
+                            for model in metadata["combined_from"]:
+                                st.write(f"• {model}")
+                        
+                        if metadata.get("prediction_files"):
+                            st.write("**📈 Prediction Files Included:**")
+                            for pred in metadata["prediction_files"]:
+                                st.write(f"• {pred}")
+                        
+                        # Store in session state for download
+                        st.session_state['combined_report'] = combined_report
+                        st.session_state['combined_report_generated'] = True
+                        
+                    else:
+                        st.error("❌ Failed to combine reports. Please check your files and try again.")
+                        
+                except Exception as e:
+                    st.error(f"❌ Error combining reports: {str(e)}")
+    
+    # Download section
+    if st.session_state.get('combined_report_generated', False):
+        st.markdown("---")
+        st.subheader("📥 Download Combined Report")
+        
+        combined_report = st.session_state.get('combined_report', {})
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"combined_comprehensive_report_{timestamp}.json"
+        
+        # Create download button
+        json_str = json.dumps(combined_report, indent=2, ensure_ascii=False)
+        
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            st.download_button(
+                label="📥 Download Combined JSON",
+                data=json_str.encode('utf-8'),
+                file_name=filename,
+                mime="application/json",
+                type="primary",
+                use_container_width=True
+            )
+        
+        with col2:
+            st.info(f"File: {filename} | Size: {len(json_str.encode('utf-8')) / 1024:.1f} KB")
+        
+        # Preview section
+        with st.expander("🔍 Preview Combined Report Structure", expanded=False):
+            st.json({
+                "combined_report_metadata": combined_report.get("combined_report_metadata", {}),
+                "dataset_overview": "..." if "dataset_overview" in combined_report else "Not included",
+                "models": list(combined_report.get("models", {}).keys()),
+                "predictions": list(combined_report.get("predictions", {}).keys())
+            })
+    
+    # Instructions section
+    with st.expander("ℹ️ How to Use This Tab", expanded=False):
+        st.markdown("""
+        ### Instructions:
+        
+        1. **Upload Analysis Reports (JSON)**:
+           - Upload multicollinearity analysis files (e.g., `multicollinearity_analysis_MLR_20250724_1540.json`)
+           - Upload other model comprehensive reports in JSON format
+           
+        2. **Upload Prediction Files (CSV)**:
+           - Upload prediction CSV files from your `saved_predictions` folder
+           - Files like `MLR_predictions.csv`, `ML + SHAP_predictions.csv`, etc.
+           
+        3. **Combine Reports**:
+           - Click "Combine Reports" to merge all uploaded files
+           - Common sections (like dataset overview) appear only once
+           - Model-specific sections are preserved separately
+           
+        4. **Download**:
+           - Download the combined JSON file containing all your analysis
+           - The file includes metadata, analysis results, and predictions
+        
+        ### What Gets Combined:
+        - **Analysis Reports**: Multicollinearity analysis, model diagnostics, performance metrics
+        - **Predictions**: All prediction datasets with model identification
+        - **Metadata**: Information about when and how the combination was created
+        """)
+
+
 def main():
     """Main Streamlit application."""
     st.set_page_config(
@@ -883,11 +1044,13 @@ def main():
         with st.expander("Data Preparation for Advanced Models", expanded=False):
             st.session_state['df'] = create_data_preparation_section(st.session_state['df'])
 
-    # Create tabs for each model
+    # Create tabs for each model + combine reports tab
     model_names = [m["name"] for m in MODEL_TABLE]
-    tabs = st.tabs(model_names)
+    all_tab_names = model_names + ["📊 Combine Reports"]
+    tabs = st.tabs(all_tab_names)
 
-    for tab, model_name in zip(tabs, model_names):
+    # Handle model tabs
+    for tab, model_name in zip(tabs[:-1], model_names):
         with tab:
             st.header(f"{model_name} Model")
             
@@ -961,6 +1124,10 @@ def main():
                     st.info("Try refreshing the page or checking your data format.")
             else:
                 st.info("📁 Please upload data files using the uploader at the top of the page.")
+
+    # Handle combine reports tab
+    with tabs[-1]:
+        create_combine_reports_tab()
 
 
 if __name__ == "__main__":
