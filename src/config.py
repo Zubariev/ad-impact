@@ -54,6 +54,11 @@ MODEL_TABLE = [
         "chart": "Bar Chart (Matched Groups) / Density Plot",
         "variables_allowed": (1, 20),
     },
+    {
+        "name": "Chronos T5 Large",
+        "chart": "Time Series Forecast Line Chart",
+        "variables_allowed": (1, 10),
+    },
 ]
 
 MODEL_CONFIGS = {m["name"]: m for m in MODEL_TABLE}
@@ -70,6 +75,12 @@ MODEL_HYPERPARAMS = {
     "VAR": {
         "maxlags": 5,
         "ic": "aic",
+    },
+    "Chronos T5 Large": {
+        "model_name": "amazon/chronos-t5-large",
+        "prediction_length": 12,
+        "num_samples": 20,
+        "min_observations": 10,
     },
 }
 

@@ -138,3 +138,11 @@ saved_predictions/
 *.xlsx
 *.csv
 *.json
+*.jpeg
+*.png
+*.jpg
+*.gif
+*.bmp
+*.tiff
+*.ico
+*.webp

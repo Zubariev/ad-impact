@@ -617,6 +617,288 @@ def train_psm(
         raise
 
 
+@st.cache_resource
+def train_chronos(
+    df: pd.DataFrame, 
+    date_col: str, 
+    target: str, 
+    features: List[str],
+    prediction_length: int = None,
+    test_percentage: int = None
+) -> Tuple[Any, pd.DataFrame, Figure]:
+    """
+    Train Chronos T5 Large model for time series forecasting.
+    
+    Args:
+        df: Input DataFrame
+        date_col: Date column name
+        target: Target variable name
+        features: Feature variable names (for context)
+        prediction_length: Number of future points to forecast (optional)
+        test_percentage: Percentage of data to use for testing (optional, default 20%)
+        
+    Returns:
+        Tuple of (trained model, predictions DataFrame, plotly figure)
+    """
+    try:
+        logger.info("Loading Chronos T5 Large model for forecasting")
+        
+        # Import Chronos pipeline
+        try:
+            import torch
+            from chronos import ChronosPipeline
+        except ImportError as e:
+            raise ImportError(f"Required libraries not installed: {e}. Please install with: pip install chronos-forecasting torch")
+        
+        # Load the Chronos pipeline with optimal settings
+        with st.spinner("Loading Chronos T5 Large model (this may take a few minutes on first run)..."):
+            # Detect best available device and dtype
+            if torch.cuda.is_available():
+                device_map = "cuda"
+                dtype = torch.bfloat16
+                st.info("Using GPU acceleration with bfloat16 for optimal performance")
+            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                device_map = "mps"  # Apple Silicon
+                dtype = torch.float32
+                st.info("Using Apple Silicon MPS acceleration")
+            else:
+                device_map = "cpu"
+                dtype = torch.float32
+                st.info("Using CPU (consider GPU for faster inference)")
+            
+            pipeline = ChronosPipeline.from_pretrained(
+                "amazon/chronos-t5-large",
+                device_map=device_map,
+                torch_dtype=dtype,
+            )
+        
+        # Prepare data
+        df_clean = df.dropna(subset=[date_col, target])
+        df_sorted = df_clean.sort_values(date_col).reset_index(drop=True)
+        
+        if len(df_sorted) < 10:
+            raise ValueError("Need at least 10 observations for Chronos forecasting")
+        
+        # Only convert to datetime if it looks like actual date/time data
+        is_datetime_like = False
+        if df_sorted[date_col].dtype == 'object':
+            # Check if string data looks like dates
+            sample_values = df_sorted[date_col].dropna().head(3).astype(str)
+            if any(len(str(val)) > 8 and ('-' in str(val) or '/' in str(val) or ':' in str(val)) for val in sample_values):
+                try:
+                    df_sorted[date_col] = pd.to_datetime(df_sorted[date_col])
+                    is_datetime_like = True
+                except (ValueError, TypeError):
+                    pass
+        elif pd.api.types.is_datetime64_any_dtype(df_sorted[date_col]):
+            is_datetime_like = True
+        
+        # Provide user feedback about column type
+        if is_datetime_like:
+            st.success(f"Using datetime column '{date_col}' for time series analysis")
+        elif pd.api.types.is_numeric_dtype(df_sorted[date_col]):
+            st.info(f"Using numeric column '{date_col}' as sequence index. Consider using a date column for better time series analysis.")
+        else:
+            st.warning(f"Column '{date_col}' is not numeric or date/time. Chronos works best with temporal data.")
+        
+        # Prepare time series data - use ALL data as context (Chronos is zero-shot)
+        target_series = df_sorted[target].values
+        
+        # Split data based on user-specified test percentage or default
+        if test_percentage is not None:
+            test_ratio = test_percentage / 100.0
+            train_size = int((1 - test_ratio) * len(target_series))
+            st.info(f"Using user-specified {test_percentage}% ({len(target_series) - train_size} points) for testing")
+        else:
+            train_size = int(0.8 * len(target_series))
+            st.info(f"Using default 20% ({len(target_series) - train_size} points) for testing")
+        
+        test_data = target_series[train_size:] if train_size < len(target_series) else []
+        
+        # Use user-specified prediction length or calculate default
+        if prediction_length is None:
+            prediction_length = len(test_data) if len(test_data) > 0 else min(12, len(target_series) // 4)
+            prediction_length = max(1, prediction_length)  # Ensure at least 1 prediction
+            st.info(f"Using {len(target_series)} observations as context to forecast {prediction_length} future points (auto-calculated)")
+        else:
+            prediction_length = max(1, min(prediction_length, 100))  # Ensure reasonable bounds
+            st.success(f"Using {len(target_series)} observations as context to forecast {prediction_length} future points (user-specified)")
+        
+        # Generate forecasts using Chronos (following HF example pattern)
+        with st.spinner("Generating forecasts using Chronos T5 Large..."):
+            # Use full historical data as context (like HF example)
+            context = torch.tensor(target_series, dtype=dtype)
+            
+            # Generate forecast (using defaults similar to HF example)
+            forecast = pipeline.predict(context, prediction_length)
+            
+            # Extract forecast statistics
+            # forecast shape: [num_series, num_samples, prediction_length]
+            forecast_numpy = forecast[0].numpy()  # First (and only) series
+            
+            # Calculate quantiles for uncertainty estimation
+            forecast_median = np.median(forecast_numpy, axis=0)
+            forecast_lower = np.quantile(forecast_numpy, 0.1, axis=0)  # 10th percentile
+            forecast_upper = np.quantile(forecast_numpy, 0.9, axis=0)  # 90th percentile
+        
+        # Create future dates/indices for forecasts
+        last_value = df_sorted[date_col].iloc[-1]
+        
+        if is_datetime_like and pd.api.types.is_datetime64_any_dtype(df_sorted[date_col]):
+            # Handle datetime columns with proper pandas methods
+            try:
+                freq = pd.infer_freq(df_sorted[date_col])
+                if freq is not None:
+                    # Use pandas date_range with inferred frequency
+                    future_dates = pd.date_range(start=last_value, periods=prediction_length + 1, freq=freq)[1:]
+                else:
+                    # Calculate most common time difference
+                    time_diffs = df_sorted[date_col].diff().dropna()
+                    if len(time_diffs) > 0:
+                        # Use the most common time difference
+                        most_common_diff = time_diffs.mode().iloc[0] if len(time_diffs.mode()) > 0 else pd.Timedelta(days=1)
+                        future_dates = [last_value + most_common_diff * (i + 1) for i in range(prediction_length)]
+                    else:
+                        # Fallback to daily frequency
+                        future_dates = pd.date_range(start=last_value, periods=prediction_length + 1, freq='D')[1:]
+            except Exception as e:
+                st.warning(f"⚠️ Could not generate future dates: {e}. Using sequential indices.")
+                future_dates = [f"forecast_{i+1}" for i in range(prediction_length)]
+        else:
+            # Handle numeric/ID columns or other types
+            if pd.api.types.is_numeric_dtype(df_sorted[date_col]):
+                # For numeric columns, increment by 1 (works for ID columns like 0,1,2...113)
+                try:
+                    future_dates = [last_value + (i + 1) for i in range(prediction_length)]
+                except Exception:
+                    # Fallback if arithmetic fails
+                    future_dates = [f"{last_value}_+{i+1}" for i in range(prediction_length)]
+            else:
+                # For other types, create simple sequential labels
+                future_dates = [f"{last_value}_forecast_{i+1}" for i in range(prediction_length)]
+        
+        # Create predictions DataFrame following HF example pattern
+        # Historical period: actual values (no fitting needed for zero-shot model)
+        predictions_df = pd.DataFrame({
+            date_col: list(df_sorted[date_col]) + list(future_dates),
+            f'{target}_actual': list(df_sorted[target]) + [np.nan] * prediction_length,
+            f'{target}_predicted': list(df_sorted[target]) + list(forecast_median),
+            f'{target}_lower': list(df_sorted[target]) + list(forecast_lower),
+            f'{target}_upper': list(df_sorted[target]) + list(forecast_upper),
+            'data_type': ['historical'] * len(df_sorted) + ['forecast'] * prediction_length
+        })
+        
+        # Calculate metrics on out-of-sample forecast if test data available
+        metrics = {}
+        if len(test_data) > 0:
+            # Compare forecast with actual test data
+            test_forecast = forecast_median[:len(test_data)]
+            mae = mean_absolute_error(test_data, test_forecast)
+            mse = mean_squared_error(test_data, test_forecast)
+            rmse = np.sqrt(mse)
+            
+            # Calculate additional metrics
+            mape = np.mean(np.abs((test_data - test_forecast) / test_data)) * 100
+            
+            metrics = {
+                'mae': mae,
+                'mse': mse,
+                'rmse': rmse,
+                'mape': mape,
+                'test_size': len(test_data),
+                'context_length': len(target_series),
+                'forecast_horizon': prediction_length
+            }
+            
+            logger.info(f"Chronos forecast metrics - MAE: {mae:.4f}, RMSE: {rmse:.4f}, MAPE: {mape:.2f}%")
+            st.success(f"📈 Forecast validation - MAPE: {mape:.2f}%, RMSE: {rmse:.4f}")
+        
+        # Create visualization
+        fig = go.Figure()
+        
+        # Historical data
+        historical_data = predictions_df[predictions_df['data_type'] == 'historical']
+        fig.add_trace(go.Scatter(
+            x=historical_data[date_col],
+            y=historical_data[f'{target}_actual'],
+            mode='lines',
+            name='Historical Data',
+            line=dict(color='blue', width=2)
+        ))
+        
+        # Forecasts
+        forecast_data = predictions_df[predictions_df['data_type'] == 'forecast']
+        if len(forecast_data) > 0:
+            fig.add_trace(go.Scatter(
+                x=forecast_data[date_col],
+                y=forecast_data[f'{target}_predicted'],
+                mode='lines',
+                name='Chronos Forecast (Median)',
+                line=dict(color='red', width=2)
+            ))
+            
+            # Confidence intervals (only for forecasts)
+            fig.add_trace(go.Scatter(
+                x=list(forecast_data[date_col]) + list(forecast_data[date_col][::-1]),
+                y=list(forecast_data[f'{target}_upper']) + list(forecast_data[f'{target}_lower'][::-1]),
+                fill='toself',
+                fillcolor='rgba(255,0,0,0.2)',
+                line=dict(color='rgba(255,255,255,0)'),
+                hoverinfo="skip",
+                showlegend=True,
+                name='80% Confidence Interval'
+            ))
+        
+        # Add test data if available (overlay on historical period)
+        if len(test_data) > 0:
+            test_dates = df_sorted[date_col].iloc[train_size:train_size + len(test_data)]
+            fig.add_trace(go.Scatter(
+                x=test_dates,
+                y=test_data,
+                mode='markers',
+                name='Test Data (Actual)',
+                marker=dict(color='green', size=8, symbol='circle-open')
+            ))
+        
+        # Add vertical line to separate historical and forecast
+        fig.add_vline(
+            x=df_sorted[date_col].iloc[-1],
+            line_dash="dot",
+            line_color="gray",
+            annotation_text="Forecast Start"
+        )
+        
+        fig.update_layout(
+            title=f"Chronos T5 Large Time Series Forecast: {target}",
+            xaxis_title=date_col,
+            yaxis_title=target,
+            hovermode='x unified',
+            showlegend=True,
+            height=600
+        )
+        
+        # Create model info object for consistency (exclude pipeline for pickling)
+        model_info = {
+            'model_type': 'Chronos T5 Large',
+            'target_variable': target,
+            'features': features,
+            'prediction_length': prediction_length,
+            'model_name': 'amazon/chronos-t5-large',
+            'metrics': metrics,
+            'context_length': len(target_series),
+            'device': device_map,
+            'dtype': str(dtype),
+            'note': 'Chronos pipeline not saved due to accelerate hooks - can be reloaded using model_name'
+        }
+        
+        logger.info("Chronos T5 Large forecasting completed successfully")
+        return model_info, predictions_df, fig
+        
+    except Exception as e:
+        logger.error(f"Error with Chronos model: {str(e)}")
+        raise
+
+
 # Model training function dispatcher
 TRAIN_FUNCTIONS = {
     "MLR": train_mlr,
@@ -627,6 +909,7 @@ TRAIN_FUNCTIONS = {
     "Synthetic Control": train_synthetic_control,
     "CausalImpact": train_causal_impact,
     "PSM": train_psm,
+    "Chronos T5 Large": train_chronos,
 }
 
 
@@ -647,17 +930,48 @@ def save_model_and_predictions(
         Tuple of (model file path, predictions file path)
     """
     try:
-        # Save model
-        model_path = os.path.join(MODEL_DIR, f"{model_name}.pkl")
-        joblib.dump(model, model_path)
-        
-        # Save predictions
+        # Save predictions first (always works)
         pred_path = os.path.join(PREDICTIONS_DIR, f"{model_name}_predictions.csv")
         predictions.to_csv(pred_path, index=False)
         
-        logger.info(f"Model and predictions saved for {model_name}")
+        # Handle model saving based on type
+        model_path = os.path.join(MODEL_DIR, f"{model_name}.pkl")
+        
+        if model_name == "Chronos T5 Large":
+            # Chronos models can't be pickled due to accelerate hooks
+            # Save only the metadata, pipeline can be reloaded from model_name
+            model_metadata = {
+                'model_type': model.get('model_type', 'Chronos T5 Large'),
+                'model_name': model.get('model_name', 'amazon/chronos-t5-large'),
+                'target_variable': model.get('target_variable'),
+                'features': model.get('features'),
+                'prediction_length': model.get('prediction_length'),
+                'context_length': model.get('context_length'),
+                'device': model.get('device'),
+                'dtype': model.get('dtype'),
+                'metrics': model.get('metrics'),
+                'saved_timestamp': pd.Timestamp.now().isoformat(),
+                'note': 'Model pipeline not saved - reload using ChronosPipeline.from_pretrained(model_name)'
+            }
+            joblib.dump(model_metadata, model_path)
+            logger.info(f"Chronos model metadata saved (pipeline excluded due to accelerate hooks)")
+        else:
+            # Regular models can be pickled normally
+            joblib.dump(model, model_path)
+            logger.info(f"Model saved for {model_name}")
+        
+        logger.info(f"Predictions saved for {model_name}")
         return model_path, pred_path
         
     except Exception as e:
         logger.error(f"Error saving model and predictions: {str(e)}")
+        # For Chronos, try to save at least the predictions
+        if model_name == "Chronos T5 Large":
+            try:
+                pred_path = os.path.join(PREDICTIONS_DIR, f"{model_name}_predictions.csv")
+                predictions.to_csv(pred_path, index=False)
+                logger.info(f"At least predictions saved for {model_name}")
+                return "metadata_save_failed", pred_path
+            except:
+                pass
         raise 

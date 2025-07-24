@@ -545,7 +545,7 @@ def _extract_comprehensive_metrics(baseline_results, model, df, target, features
         return {"error": str(e)}
 
 
-def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target: str, features: List[str]):
+def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target: str, features: List[str], prediction_length: int = None, test_percentage: int = None):
     """
     Safely train a model with error handling and user feedback.
     
@@ -559,12 +559,24 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
     try:
         with st.spinner(f"Training {model_name} model, please wait..."):
             model_func = TRAIN_FUNCTIONS[model_name]
-            model, predictions, fig = model_func(
-                df.copy(),
-                date_col=date_col,
-                target=target,
-                features=features,
-            )
+            
+            # Pass custom parameters for Chronos model
+            if model_name == "Chronos T5 Large" and (prediction_length is not None or test_percentage is not None):
+                model, predictions, fig = model_func(
+                    df.copy(),
+                    date_col=date_col,
+                    target=target,
+                    features=features,
+                    prediction_length=prediction_length,
+                    test_percentage=test_percentage,
+                )
+            else:
+                model, predictions, fig = model_func(
+                    df.copy(),
+                    date_col=date_col,
+                    target=target,
+                    features=features,
+                )
             
             # Save model and predictions
             model_path, pred_path = save_model_and_predictions(model, predictions, model_name)
@@ -1100,10 +1112,62 @@ def main():
                                     training_data_ok = validate_data_for_training(df_for_training, target_var, feature_vars, model_name)
                                     
                                     if training_data_ok:
+                                        # Chronos-specific settings
+                                        prediction_length = None
+                                        test_percentage = None
+                                        if model_name == "Chronos T5 Large":
+                                            st.markdown("---")
+                                            st.subheader("Forecast Settings")
+                                            
+                                            # Test data percentage input
+                                            col1, col2 = st.columns([2, 1])
+                                            with col1:
+                                                test_percentage = st.slider(
+                                                    "Percent of Dataset for Test Data (%)",
+                                                    min_value=5,
+                                                    max_value=50,
+                                                    value=20,
+                                                    step=5,
+                                                    key=f"test_pct_{model_name}",
+                                                    help="Select what percentage of your data to use for testing/validation. The rest will be used as context for forecasting."
+                                                )
+                                            with col2:
+                                                train_size = int((100 - test_percentage) / 100 * len(df_for_training))
+                                                test_size = len(df_for_training) - train_size
+                                                st.metric("Train Data", f"{train_size} points")
+                                                st.metric("Test Data", f"{test_size} points")
+                                            
+                                            # Prediction length input
+                                            st.markdown("**Future Forecasting:**")
+                                            col3, col4 = st.columns([2, 1])
+                                            with col3:
+                                                # Calculate default prediction length for guidance
+                                                default_pred_length = min(12, len(df_for_training) // 4)
+                                                default_pred_length = max(1, default_pred_length)
+                                                
+                                                prediction_length = st.number_input(
+                                                    "Number of Future Points to Forecast",
+                                                    min_value=1,
+                                                    max_value=min(100, len(df_for_training)),
+                                                    value=default_pred_length,
+                                                    step=1,
+                                                    key=f"pred_length_{model_name}",
+                                                    help=f"Specify how many future points to forecast beyond your historical data. Maximum: {min(100, len(df_for_training))}"
+                                                )
+                                            with col4:
+                                                st.metric("Total Data Points", len(df_for_training))
+                                                st.metric("Future Forecasts", prediction_length)
+                                            
+                                            # Summary information
+                                            st.info(f"📊 **Setup Summary**: Using {train_size} points for training context, {test_size} points for validation, forecasting {prediction_length} future points")
+                                            
+                                            if test_size < 2:
+                                                st.warning(f"⚠️ Test size is very small ({test_size} points). Consider using a larger test percentage for better validation.")
+                                        
                                         # Show Apply button only if data is ready
                                         if len(df_for_training) >= 5:
                                             if st.button("🚀 Apply & Train Model", key=f"apply_{model_name}", type="primary"):
-                                                train_model_safely(model_name, df_for_training, range_col, target_var, feature_vars)
+                                                train_model_safely(model_name, df_for_training, range_col, target_var, feature_vars, prediction_length, test_percentage)
                                         else:
                                             st.warning("Need at least 5 observations for training after data processing.")
                                     else:
