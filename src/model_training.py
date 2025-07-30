@@ -13,6 +13,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.graph_objects import Figure
+from scipy import stats
 import streamlit as st
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.linear_model import LinearRegression
@@ -305,8 +306,138 @@ def train_did(
             labels={"value": target}
         )
         
-        # Create predictions DataFrame
-        predictions = df[[date_col, "prediction"]]
+        # Create predictions DataFrame with additional metrics for visualization
+        predictions = df[[date_col, "prediction"]].copy()
+        
+        # Calculate ATT and confidence intervals for each time period
+        att_results = []
+        
+        # Ensure consistent type for date_col
+        original_type = df[date_col].dtype
+        logger.info(f"Original date_col type: {original_type}")
+        
+        # Get all unique times and treatment start
+        all_times = df[date_col].unique()
+        treatment_start = df[df['post'] == 1][date_col].min()
+        
+        # Sort based on type
+        if pd.api.types.is_datetime64_any_dtype(df[date_col]):
+            all_times = sorted(all_times)
+            start_idx = list(all_times).index(treatment_start)
+        elif pd.api.types.is_numeric_dtype(df[date_col]):
+            all_times = sorted([float(x) for x in all_times])
+            start_idx = list(all_times).index(float(treatment_start))
+        else:
+            # For strings or other types, sort as strings
+            all_times = sorted([str(x) for x in all_times])
+            start_idx = list(all_times).index(str(treatment_start))
+        
+        # Take 4 periods before treatment start if available
+        pre_periods = 4
+        start_idx = max(0, start_idx - pre_periods)
+        relevant_times = all_times[start_idx:]
+        
+        for t in relevant_times:
+            period_data = df[df[date_col] == t]
+            if len(period_data) > 0:
+                # Get store counts for normalization
+                treated_stores = len(period_data[period_data['treated'] == 1])
+                control_stores = len(period_data[period_data['treated'] == 0])
+                
+                # Calculate normalized treatment effect
+                treated_data = period_data[period_data['treated'] == 1][target]
+                control_data = period_data[period_data['treated'] == 0][target]
+                
+                # Convert to numeric if needed
+                try:
+                    treated_data = pd.to_numeric(treated_data, errors='coerce')
+                    control_data = pd.to_numeric(control_data, errors='coerce')
+                except Exception as e:
+                    logger.warning(f"Error converting data to numeric: {str(e)}")
+                
+                # Calculate means
+                treated_mean = float(treated_data.mean()) if not treated_data.empty else 0
+                control_mean = float(control_data.mean()) if not control_data.empty else 0
+                treated_effect = treated_mean - control_mean
+                
+                # Normalize by store count
+                att = float(treated_effect / treated_stores if treated_stores > 0 else 0)
+                
+                # Calculate ATT as percentage of target
+                target_mean = period_data[target].mean()
+                att_percentage = (att / target_mean * 100) if target_mean != 0 else 0
+                
+                # Calculate standard error for this period
+                try:
+                    treated_data = period_data[period_data['treated'] == 1][target]
+                    control_data = period_data[period_data['treated'] == 0][target]
+                    
+                    # Calculate standard deviations
+                    treated_std = float(treated_data.std()) if len(treated_data) > 1 else 0
+                    control_std = float(control_data.std()) if len(control_data) > 1 else 0
+                    
+                    # Calculate pooled standard error
+                    if treated_stores > 0 and control_stores > 0:
+                        se = np.sqrt((treated_std**2/treated_stores) + (control_std**2/control_stores))
+                    else:
+                        se = float(model.bse['treated:post'])  # fallback to model SE
+                    
+                    # Calculate confidence intervals
+                    ci_margin = 1.96 * se
+                    ci_lower = att - ci_margin
+                    ci_upper = att + ci_margin
+                    
+                    # Calculate t-statistic and p-value
+                    t_stat = att / se if se > 0 else 0
+                    p_value = 2 * (1 - stats.norm.cdf(abs(t_stat)))
+                    
+                except Exception as e:
+                    logger.warning(f"Error calculating CI for period {t}: {str(e)}")
+                    # Fallback: use model's global standard error
+                    se = float(model.bse['treated:post'])
+                    ci_margin = 1.96 * se
+                    ci_lower = att - ci_margin
+                    ci_upper = att + ci_margin
+                    p_value = float(model.pvalues['treated:post'])
+                
+                # Ensure all values are float
+                att = float(att)
+                ci_lower = float(ci_lower)
+                ci_upper = float(ci_upper)
+                p_value = float(p_value)
+                
+                att_results.append({
+                    'time': t,
+                    'att': att,
+                    'ci_lower': ci_lower,
+                    'ci_upper': ci_upper,
+                    'p_value': p_value,
+                    'treated_stores': treated_stores,
+                    'control_stores': control_stores,
+                    'is_post': t >= treatment_start,
+                    'att_percentage': float(att_percentage),
+                    'target_mean': float(target_mean)
+                })
+        
+        # Add ATT results to predictions
+        att_df = pd.DataFrame(att_results)
+        
+        # Convert time column to match original type
+        if pd.api.types.is_datetime64_any_dtype(df[date_col]):
+            att_df['time'] = pd.to_datetime(att_df['time'])
+        elif pd.api.types.is_numeric_dtype(df[date_col]):
+            att_df['time'] = pd.to_numeric(att_df['time'])
+        else:
+            att_df['time'] = att_df['time'].astype(str)
+            predictions[date_col] = predictions[date_col].astype(str)
+        
+        # Merge with consistent types
+        predictions = predictions.merge(att_df, left_on=date_col, right_on='time', how='left')
+        
+        # Add original data columns needed for parallel trends
+        predictions['outcome'] = df[target]
+        predictions['treated'] = df['treated']
+        predictions['post'] = df['post']
         
         logger.info("DiD model trained successfully")
         return model, predictions, fig

@@ -522,7 +522,7 @@ def display_mlr_metrics(df: pd.DataFrame, target: str, features: List[str]) -> N
         # Coefficient table with significance indicators
         coef_tbl = model.summary2().tables[1].rename(columns={"Coef.": "Coef"})
         coef_tbl["Signif"] = coef_tbl["P>|t|"].apply(
-            lambda p: "" if p < SIGNIFICANCE_LEVEL else ""
+            lambda p: "***" if p < 0.001 else "**" if p < 0.01 else "*" if p < 0.05 else "ns"
         )
         styled = coef_tbl.style.applymap(
             lambda p: "color:green;" if p < SIGNIFICANCE_LEVEL else "color:red;", 
@@ -1393,7 +1393,7 @@ def collect_model_report_data(
                         "conf_int_lower": float(row["[0.025"]),
                         "conf_int_upper": float(row["0.975]"]),
                         "significant": is_significant,
-                        "significance_level": "***" if row["P>|t|"] < 0.001 else "**" if row["P>|t|"] < 0.01 else "*" if row["P>|t|"] < 0.05 else "",
+                        "significance_level": "***" if row["P>|t|"] < 0.001 else "**" if row["P>|t|"] < 0.01 else "*" if row["P>|t|"] < 0.05 else "ns",
                         "interpretation": "positive_effect" if row["Coef."] > 0 else "negative_effect"
                     }
                 
@@ -1971,7 +1971,7 @@ def _calculate_variable_importance(model, X, y, features, model_name):
                     "abs_coefficient": float(abs(coef)),
                     "t_value": float(t_val),
                     "p_value": float(p_val),
-                    "significance": "***" if p_val < 0.001 else "**" if p_val < 0.01 else "*" if p_val < 0.05 else "",
+                    "significance": "***" if p_val < 0.001 else "**" if p_val < 0.01 else "*" if p_val < 0.05 else "ns",
                     "importance_rank": 0,  # Will be filled later
                     "standardized_coefficient": float(coef * X[feat].std() / y.std()),
                     "variable_interpretation": "positive_driver" if coef > 0 else "negative_driver"
@@ -2546,3 +2546,658 @@ def display_interpretation_hints(model_name: str) -> None:
         
         st.markdown("---")
         st.info("💡 **Tip**: Your comprehensive JSON report contains detailed diagnostics to help validate these interpretation guidelines.")
+
+
+def create_did_att_chart(
+    df: pd.DataFrame,
+    time_col: str,
+    att_col: str,
+    ci_lower_col: str,
+    ci_upper_col: str,
+    p_value_col: str = None,
+    is_post_col: str = None,
+    window_size: int = 4  # for rolling average
+) -> go.Figure:
+    """
+    Create a line chart showing ATT over time with confidence intervals.
+    
+    Args:
+        df: DataFrame containing ATT and CI data
+        time_col: Column name for time periods
+        att_col: Column name for ATT values
+        ci_lower_col: Column name for lower CI bound
+        ci_upper_col: Column name for upper CI bound
+        p_value_col: Column name for p-values (optional)
+        is_post_col: Column name indicating post-treatment period (optional)
+        window_size: Size of rolling window for smoothing
+        
+    Returns:
+        Plotly figure object
+    """
+    try:
+        # Create copy to avoid modifying original (same as working charts)
+        plot_df = df.copy()
+        
+        # --- unify x-axis dtype ---
+        plot_df["raw_time"] = plot_df[time_col].astype(str)      # keep original text
+        plot_df[time_col] = pd.to_datetime(plot_df[time_col],
+                                           errors="coerce")
+        plot_df[time_col] = plot_df[time_col].fillna(
+                            pd.to_datetime("1970-01-01"))        # tmp filler
+        plot_df = plot_df.sort_values(time_col)                  # stable sort
+        plot_df[time_col] = plot_df["raw_time"].astype(str)      # final – pure str
+        plot_df.drop(columns=["raw_time"], inplace=True)         # cleanup
+        
+        # Convert numeric columns
+        plot_df[att_col] = pd.to_numeric(plot_df[att_col], errors="coerce").fillna(0.0)
+        plot_df[ci_lower_col] = pd.to_numeric(plot_df[ci_lower_col], errors="coerce").fillna(0.0)
+        plot_df[ci_upper_col] = pd.to_numeric(plot_df[ci_upper_col], errors="coerce").fillna(0.0)
+        if p_value_col and p_value_col in plot_df.columns:
+            plot_df[p_value_col] = pd.to_numeric(plot_df[p_value_col], errors="coerce").fillna(1.0)
+        
+        # Calculate rolling averages (same as working charts)
+        plot_df['att_smooth'] = plot_df[att_col].rolling(window=window_size, center=True).mean()
+        plot_df['ci_lower_smooth'] = plot_df[ci_lower_col].rolling(window=window_size, center=True).mean()
+        plot_df['ci_upper_smooth'] = plot_df[ci_upper_col].rolling(window=window_size, center=True).mean()
+        
+        fig = go.Figure()
+        
+        # Add confidence interval
+        fig.add_trace(go.Scatter(
+            x=plot_df[time_col],
+            y=plot_df['ci_upper_smooth'],
+            mode='lines',
+            name='95% CI',
+            line=dict(width=0),
+            showlegend=True,
+            hovertemplate='<b>Upper CI</b><br>Time: %{x}<br>Value: %{y:.1f} visits/store<extra></extra>'
+        ))
+        
+        fig.add_trace(go.Scatter(
+            x=plot_df[time_col],
+            y=plot_df['ci_lower_smooth'],
+            mode='lines',
+            name='95% CI',
+            fill='tonexty',
+            fillcolor='rgba(68, 68, 68, 0.2)',
+            line=dict(width=0),
+            showlegend=False,
+            hovertemplate='<b>Lower CI</b><br>Time: %{x}<br>Value: %{y:.1f} visits/store<extra></extra>'
+        ))
+        
+        # Add ATT line with color based on significance
+        if p_value_col:
+            # Split into significant and non-significant segments
+            sig_df = plot_df[plot_df[p_value_col] < 0.05]
+            nonsig_df = plot_df[plot_df[p_value_col] >= 0.05]
+            
+            # Add significant points
+            if not sig_df.empty:
+                fig.add_trace(go.Scatter(
+                    x=sig_df[time_col],
+                    y=sig_df['att_smooth'],
+                    mode='lines+markers',
+                    name='Significant ATT (p < 0.05)',
+                    line=dict(color='#1f77b4', width=2),
+                    marker=dict(size=8),
+                    hovertemplate='<b>ATT (Significant)</b><br>Time: %{x}<br>Value: %{y:.1f} visits/store<br>p-value: %{customdata:.3f}<extra></extra>',
+                    customdata=sig_df[p_value_col]
+                ))
+            
+            # Add non-significant points
+            if not nonsig_df.empty:
+                fig.add_trace(go.Scatter(
+                    x=nonsig_df[time_col],
+                    y=nonsig_df['att_smooth'],
+                    mode='lines+markers',
+                    name='Non-significant ATT',
+                    line=dict(color='#7f7f7f', width=2, dash='dot'),
+                    marker=dict(size=6),
+                    hovertemplate='<b>ATT (Non-significant)</b><br>Time: %{x}<br>Value: %{y:.1f} visits/store<br>p-value: %{customdata:.3f}<extra></extra>',
+                    customdata=nonsig_df[p_value_col]
+                ))
+        else:
+            # Add single ATT line if no p-values
+            fig.add_trace(go.Scatter(
+                x=plot_df[time_col],
+                y=plot_df['att_smooth'],
+                mode='lines+markers',
+                name='ATT',
+                line=dict(color='#1f77b4', width=2),
+                hovertemplate='<b>ATT</b><br>Time: %{x}<br>Value: %{y:.1f} visits/store<extra></extra>'
+            ))
+        
+        # Add treatment start line if post period indicator exists
+        if is_post_col and not plot_df.empty:
+            # Use string time column directly (no arithmetic)
+            treatment_start = plot_df[plot_df[is_post_col]].iloc[0][time_col]
+            x_value = str(treatment_start)
+            
+            fig.add_vline(
+                x=x_value,
+                line_dash="dash",
+                line_color="#ff7f0e",
+                annotation_text="Treatment Start",
+                annotation_position="top"
+            )
+        
+        # Add zero line
+        fig.add_hline(y=0, line_dash="dash", line_color="gray")
+        
+        # Update layout
+        fig.update_layout(
+            title=dict(
+                text='Average Treatment Effect Over Time<br><sup>Per-store visits relative to control group, 4-week rolling average</sup>',
+                x=0.5,
+                xanchor='center'
+            ),
+            xaxis_title='Time Period',
+            yaxis_title='Average Treatment Effect (visits per store)',
+            hovermode='x unified',
+            template='plotly_white',
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            height=500
+        )
+        
+        return fig
+        
+    except Exception as e:
+        logger.error(f"Error creating ATT chart: {str(e)}")
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"Error creating chart: {str(e)}<br>Please check your data format and try again.",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14)
+        )
+        return fig
+
+def create_cumulative_att_chart(
+    df: pd.DataFrame,
+    time_col: str,
+    att_col: str
+) -> go.Figure:
+    """
+    Create a cumulative line chart showing total ATT over time.
+    
+    Args:
+        df: DataFrame containing ATT data
+        time_col: Column name for time periods
+        att_col: Column name for ATT values
+        
+    Returns:
+        Plotly figure object
+    """
+    try:
+        # Calculate cumulative ATT
+        df = df.copy()
+        df['cumulative_att'] = df[att_col].cumsum()
+        
+        fig = go.Figure()
+        
+        # Add cumulative ATT line
+        fig.add_trace(go.Scatter(
+            x=df[time_col],
+            y=df['cumulative_att'],
+            mode='lines+markers',
+            name='Cumulative ATT',
+            line=dict(color='green', width=2),
+            hovertemplate='<b>Cumulative ATT</b><br>Time: %{x}<br>Value: %{y:.2f}<extra></extra>'
+        ))
+        
+        # Add zero line
+        fig.add_hline(y=0, line_dash="dash", line_color="gray")
+        
+        # Update layout
+        fig.update_layout(
+            title='Cumulative ATT Over Time',
+            xaxis_title='Time Period',
+            yaxis_title='Cumulative Average Treatment Effect',
+            hovermode='x unified',
+            template='plotly_white',
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            height=500
+        )
+        
+        return fig
+        
+    except Exception as e:
+        logger.error(f"Error creating cumulative ATT chart: {str(e)}")
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"Error creating chart: {str(e)}<br>Please check your data format and try again.",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14)
+        )
+        return fig
+
+def create_att_percentage_chart(
+    df: pd.DataFrame,
+    time_col: str,
+    att_percentage_col: str = 'att_percentage',
+    p_value_col: str = None,
+    significance_level: float = 0.05,
+    window_size: int = 4  # for rolling average
+) -> go.Figure:
+    """
+    Create a line chart showing ATT as percentage of target variable over time.
+    
+    Args:
+        df: DataFrame containing ATT percentage data
+        time_col: Column name for time periods
+        att_percentage_col: Column name for ATT percentage values
+        p_value_col: Column name for p-values (optional)
+        significance_level: P-value threshold for significance
+        window_size: Size of rolling window for smoothing
+        
+    Returns:
+        Plotly figure object
+    """
+    try:
+        # Create copy to avoid modifying original
+        plot_df = df.copy()
+        
+        # Sort by time column
+        try:
+            plot_df[time_col] = pd.to_datetime(plot_df[time_col])
+        except (ValueError, TypeError):
+            pass
+        plot_df = plot_df.sort_values(time_col)
+        
+        # Calculate rolling average
+        plot_df['att_pct_smooth'] = plot_df[att_percentage_col].rolling(window=window_size, center=True).mean()
+        
+        fig = go.Figure()
+        
+        # Add ATT percentage line with color based on significance
+        if p_value_col:
+            # Split into significant and non-significant segments
+            sig_df = plot_df[plot_df[p_value_col] < significance_level]
+            nonsig_df = plot_df[plot_df[p_value_col] >= significance_level]
+            
+            # Add significant points
+            if not sig_df.empty:
+                fig.add_trace(go.Scatter(
+                    x=sig_df[time_col],
+                    y=sig_df['att_pct_smooth'],
+                    mode='lines+markers',
+                    name='Significant Effect (p < 0.05)',
+                    line=dict(color='#1f77b4', width=2),
+                    marker=dict(size=8),
+                    hovertemplate='<b>ATT %</b><br>Time: %{x}<br>Value: %{y:.1f}%<br>p-value: %{customdata:.3f}<extra></extra>',
+                    customdata=sig_df[p_value_col]
+                ))
+            
+            # Add non-significant points
+            if not nonsig_df.empty:
+                fig.add_trace(go.Scatter(
+                    x=nonsig_df[time_col],
+                    y=nonsig_df['att_pct_smooth'],
+                    mode='lines+markers',
+                    name='Non-significant Effect',
+                    line=dict(color='#7f7f7f', width=2, dash='dot'),
+                    marker=dict(size=6),
+                    hovertemplate='<b>ATT %</b><br>Time: %{x}<br>Value: %{y:.1f}%<br>p-value: %{customdata:.3f}<extra></extra>',
+                    customdata=nonsig_df[p_value_col]
+                ))
+        else:
+            # Add single line if no p-values
+            fig.add_trace(go.Scatter(
+                x=plot_df[time_col],
+                y=plot_df['att_pct_smooth'],
+                mode='lines+markers',
+                name='ATT %',
+                line=dict(color='#1f77b4', width=2),
+                hovertemplate='<b>ATT %</b><br>Time: %{x}<br>Value: %{y:.1f}%<extra></extra>'
+            ))
+        
+        # Add zero line
+        fig.add_hline(y=0, line_dash="dash", line_color="gray")
+        
+        # Update layout
+        fig.update_layout(
+            title=dict(
+                text='Treatment Effect as Percentage of Target<br><sup>Shows campaign impact relative to baseline visits (4-week rolling average)</sup>',
+                x=0.5,
+                xanchor='center'
+            ),
+            xaxis_title='Time Period',
+            yaxis_title='ATT as % of Target',
+            hovermode='x unified',
+            template='plotly_white',
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            height=500
+        )
+        
+        return fig
+        
+    except Exception as e:
+        logger.error(f"Error creating ATT percentage chart: {str(e)}")
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"Error creating chart: {str(e)}<br>Please check your data format and try again.",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14)
+        )
+        return fig
+
+
+def create_att_bar_chart(
+    df: pd.DataFrame,
+    time_col: str,
+    att_col: str,
+    p_value_col: str,
+    significance_level: float = 0.05
+) -> go.Figure:
+    """
+    Create a bar chart showing ATT by time period with significance highlighting.
+    
+    Args:
+        df: DataFrame containing ATT and p-value data
+        time_col: Column name for time periods
+        att_col: Column name for ATT values
+        p_value_col: Column name for p-values
+        significance_level: P-value threshold for significance
+        
+    Returns:
+        Plotly figure object
+    """
+    try:
+        # Create color array based on significance
+        colors = ['rgba(0, 128, 0, 0.7)' if p < significance_level else 'rgba(128, 128, 128, 0.7)' 
+                 for p in df[p_value_col]]
+        
+        fig = go.Figure()
+        
+        # Add ATT bars
+        fig.add_trace(go.Bar(
+            x=df[time_col],
+            y=df[att_col],
+            marker_color=colors,
+            name='ATT',
+            hovertemplate='<b>ATT</b><br>Time: %{x}<br>Value: %{y:.2f}<br>P-value: %{customdata:.3f}<extra></extra>',
+            customdata=df[p_value_col]
+        ))
+        
+        # Add zero line
+        fig.add_hline(y=0, line_dash="dash", line_color="gray")
+        
+        # Update layout
+        fig.update_layout(
+            title='ATT by Week',
+            xaxis_title='Time Period',
+            yaxis_title='Average Treatment Effect on the Treated (ATT)',
+            hovermode='x unified',
+            template='plotly_white',
+            showlegend=False,
+            height=500
+        )
+        
+        # Add legend for color coding
+        fig.add_trace(go.Bar(
+            x=[None],
+            y=[None],
+            name='Significant (p < 0.05)',
+            marker_color='rgba(0, 128, 0, 0.7)',
+            showlegend=True
+        ))
+        
+        fig.add_trace(go.Bar(
+            x=[None],
+            y=[None],
+            name='Not Significant',
+            marker_color='rgba(128, 128, 128, 0.7)',
+            showlegend=True
+        ))
+        
+        return fig
+        
+    except Exception as e:
+        logger.error(f"Error creating ATT bar chart: {str(e)}")
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"Error creating chart: {str(e)}<br>Please check your data format and try again.",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14)
+        )
+        return fig
+
+def create_parallel_trends_chart(
+    df: pd.DataFrame,
+    time_col: str,
+    outcome_col: str,
+    treatment_col: str,
+    treatment_time: Any = None
+) -> go.Figure:
+    """
+    Create a line chart showing pre- and post-treatment trends by group.
+    
+    Args:
+        df: DataFrame containing outcome data for both groups
+        time_col: Column name for time periods
+        outcome_col: Column name for outcome variable
+        treatment_col: Column name indicating treatment/control group
+        treatment_time: Time period when treatment began (optional)
+        
+    Returns:
+        Plotly figure object
+    """
+    try:
+        # Create copy to avoid modifying original (same as working charts)
+        plot_df = df.copy()
+        
+        # --- unify x-axis dtype ---
+        plot_df["raw_time"] = plot_df[time_col].astype(str)      # keep original text
+        plot_df[time_col] = pd.to_datetime(plot_df[time_col],
+                                           errors="coerce")
+        plot_df[time_col] = plot_df[time_col].fillna(
+                            pd.to_datetime("1970-01-01"))        # tmp filler
+        plot_df = plot_df.sort_values(time_col)                  # stable sort
+        plot_df[time_col] = plot_df["raw_time"].astype(str)      # final – pure str
+        plot_df.drop(columns=["raw_time"], inplace=True)         # cleanup
+        
+        # Convert numeric columns
+        plot_df[outcome_col] = pd.to_numeric(plot_df[outcome_col], errors="coerce").fillna(0.0)
+        plot_df[treatment_col] = pd.to_numeric(plot_df[treatment_col], errors="coerce").fillna(0.0)
+        
+        # Calculate mean outcome by time and group (same as working charts)
+        grouped = plot_df.groupby([time_col, treatment_col])[outcome_col].mean().reset_index()
+        
+        fig = go.Figure()
+        
+        # Add line for treatment group
+        treatment_data = grouped[grouped[treatment_col] == 1]
+        fig.add_trace(go.Scatter(
+            x=treatment_data[time_col],
+            y=treatment_data[outcome_col],
+            mode='lines+markers',
+            name='Treatment Group',
+            line=dict(color='blue', width=2),
+            marker=dict(size=6),
+            hovertemplate='<b>Treatment Group</b><br>Time: %{x}<br>Value: %{y:.1f}<extra></extra>'
+        ))
+        
+        # Add line for control group
+        control_data = grouped[grouped[treatment_col] == 0]
+        fig.add_trace(go.Scatter(
+            x=control_data[time_col],
+            y=control_data[outcome_col],
+            mode='lines+markers',
+            name='Control Group',
+            line=dict(color='red', width=2),
+            marker=dict(size=6),
+            hovertemplate='<b>Control Group</b><br>Time: %{x}<br>Value: %{y:.1f}<extra></extra>'
+        ))
+        
+        # Add treatment time vertical line if provided (same as working charts)
+        if treatment_time is not None:
+            fig.add_vline(
+                x=treatment_time,
+                line_dash="dash",
+                line_color="#ff7f0e",
+                annotation_text="Treatment Start",
+                annotation_position="top"
+            )
+        
+        # Update layout
+        fig.update_layout(
+            title='Pre- and Post-Treatment Trends by Group',
+            xaxis_title='Time Period',
+            yaxis_title='Outcome Variable',
+            hovermode='x unified',
+            template='plotly_white',
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            height=500
+        )
+        
+        return fig
+        
+    except Exception as e:
+        logger.error(f"Error creating parallel trends chart: {str(e)}")
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"Error creating chart: {str(e)}<br>Please check your data format and try again.",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14)
+        )
+        return fig
+
+def display_did_visualizations(
+    df: pd.DataFrame,
+    time_col: str,
+    att_col: str,
+    ci_lower_col: str = None,
+    ci_upper_col: str = None,
+    p_value_col: str = None,
+    outcome_col: str = None,
+    treatment_col: str = None,
+    treatment_time: Any = None
+) -> None:
+    """
+    Display comprehensive DiD analysis visualizations.
+    
+    Args:
+        df: DataFrame containing DiD analysis results
+        time_col: Column name for time periods
+        att_col: Column name for ATT values
+        ci_lower_col: Column name for lower CI bound (optional)
+        ci_upper_col: Column name for upper CI bound (optional)
+        p_value_col: Column name for p-values (optional)
+        outcome_col: Column name for outcome variable (optional)
+        treatment_col: Column name indicating treatment/control group (optional)
+        treatment_time: Time period when treatment began (optional)
+    """
+    try:
+        st.subheader("Difference-in-Differences (DiD) Analysis")
+        
+        # Clean the data at entry point to prevent type errors
+        clean_df = df.copy()
+        
+        # Force convert numeric columns to float
+        numeric_columns = [att_col, ci_lower_col, ci_upper_col, p_value_col, outcome_col, treatment_col]
+        for col in numeric_columns:
+            if col and col in clean_df.columns:
+                try:
+                    clean_df[col] = pd.to_numeric(clean_df[col], errors='coerce').fillna(0.0)
+                except Exception as e:
+                    logger.warning(f"Error converting {col}: {e}")
+                    clean_df[col] = 0.0
+                
+        # ATT over time with confidence intervals
+        if ci_lower_col and ci_upper_col:
+            st.markdown("#### ATT Over Time with Confidence Intervals")
+            fig_att = create_did_att_chart(
+                df=clean_df,
+                time_col=time_col,
+                att_col=att_col,
+                ci_lower_col=ci_lower_col,
+                ci_upper_col=ci_upper_col,
+                p_value_col=p_value_col,
+                is_post_col='is_post',
+                window_size=4
+            )
+            st.plotly_chart(fig_att, use_container_width=True, key="did_att_chart")
+            st.caption("""
+            This chart shows the per-store impact of the campaign over time. Key features:
+            - **Blue line/points**: Statistically significant effects (p < 0.05)
+            - **Gray line/points**: Non-significant effects
+            - **Shaded area**: 95% confidence interval
+            - **Orange line**: Treatment start date
+            - **Values**: Average additional visits per store (4-week rolling average)
+            """)
+        
+        # Cumulative ATT
+        st.markdown("#### Cumulative ATT Over Time")
+        fig_cumulative = create_cumulative_att_chart(clean_df, time_col, att_col)
+        st.plotly_chart(fig_cumulative, use_container_width=True, key="did_cumulative_chart")
+        st.caption("This chart aggregates the weekly treatment effects to show the total accumulated impact of the campaign. Useful for understanding long-term gain and return.")
+        
+        # ATT by week with significance
+        if p_value_col:
+            st.markdown("#### ATT by Week with Significance")
+            fig_bar = create_att_bar_chart(clean_df, time_col, att_col, p_value_col)
+            st.plotly_chart(fig_bar, use_container_width=True, key="did_bar_chart")
+            st.caption("Bar chart version of ATT by week for clearer point comparison. Bars are colored by significance to help stakeholders quickly spot meaningful impact weeks.")
+            
+            # ATT as percentage of target
+            st.markdown("#### Treatment Effect as Percentage of Target")
+            fig_pct = create_att_percentage_chart(
+                df=clean_df,
+                time_col=time_col,
+                att_percentage_col='att_percentage',
+                p_value_col=p_value_col,
+                window_size=4
+            )
+            st.plotly_chart(fig_pct, use_container_width=True, key="did_percentage_chart")
+            st.caption("""
+            This chart shows the campaign's impact as a percentage of baseline visits. Key features:
+            - **Values**: Treatment effect divided by average visits (as percentage)
+            - **Blue line**: Statistically significant effects (p < 0.05)
+            - **Gray line**: Non-significant effects
+            - **Smoothing**: 4-week rolling average to reduce noise
+            """)
+        
+        # Parallel trends
+        if outcome_col and treatment_col:
+            st.markdown("#### Parallel Trends Analysis")
+            fig_trends = create_parallel_trends_chart(clean_df, time_col, outcome_col, treatment_col, treatment_time)
+            st.plotly_chart(fig_trends, use_container_width=True, key="did_trends_chart")
+            st.caption("This chart checks the parallel trends assumption by plotting average outcomes over time for treatment and control groups. Useful for validating the DiD model assumptions.")
+        
+        logger.info("DiD visualizations displayed successfully")
+        
+    except Exception as e:
+        logger.error(f"Error displaying DiD visualizations: {str(e)}")
+        st.error(f"Error displaying DiD visualizations: {str(e)}")

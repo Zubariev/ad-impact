@@ -39,7 +39,13 @@ from data_utils import (
     suggest_model_data_requirements
 )
 from model_training import TRAIN_FUNCTIONS, save_model_and_predictions
-from visualization import display_descriptive_stats, display_model_metrics, display_interpretation_hints, collect_model_report_data
+from visualization import (
+    display_descriptive_stats,
+    display_model_metrics,
+    display_interpretation_hints,
+    collect_model_report_data,
+    display_did_visualizations
+)
 from combine_reports import combine_uploaded_files
 
 # Configure logging
@@ -582,7 +588,23 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
             model_path, pred_path = save_model_and_predictions(model, predictions, model_name)
             
             st.success(f" {model_name} training complete!")
-            st.plotly_chart(fig, use_container_width=True)
+            
+            # Display model-specific visualizations
+            if model_name == "DiD":
+                # Display comprehensive DiD visualizations
+                display_did_visualizations(
+                    df=predictions,
+                    time_col=date_col,
+                    att_col='att',
+                    ci_lower_col='ci_lower',
+                    ci_upper_col='ci_upper',
+                    p_value_col='p_value',
+                    outcome_col='outcome',
+                    treatment_col='treated',
+                    treatment_time=predictions[predictions['post'] == 1][date_col].min()
+                )
+            else:
+                st.plotly_chart(fig, use_container_width=True)
             
             # Download buttons
             col1, col2, col3 = st.columns(3)
