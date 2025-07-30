@@ -124,8 +124,8 @@ def train_distributed_lag(
         
         # Create contributions DataFrame
         contributions = pd.DataFrame({date_col: df[date_col]})
-        for coef, feat in zip(reg.coef_, lagged_cols):
-            contributions[feat] = df[feat] * coef
+        for coef, lagged_col in zip(reg.coef_, lagged_cols):
+            contributions[lagged_col] = df[lagged_col] * coef
         
         # Create visualization
         fig = px.area(
@@ -213,6 +213,37 @@ def train_ml_shap(
         model.categorical_cols_ = categorical_cols
         model.feature_names_ = features
         
+        # Perform proper model evaluation with train/test split
+        test_size = min(int(0.2 * len(X)), 50)  # Use 20% or max 50 observations for testing
+        if test_size > 5:  # Only do evaluation if we have enough test data
+            X_train = X.iloc[:-test_size]
+            X_test = X.iloc[-test_size:]
+            y_train = y.iloc[:-test_size]
+            y_test = y.iloc[-test_size:]
+            
+            # Retrain model on training data only for evaluation
+            eval_model = xgb.XGBRegressor(
+                n_estimators=params["n_estimators"],
+                learning_rate=params["learning_rate"],
+                enable_categorical=True if categorical_cols else False
+            )
+            eval_model.fit(X_train, y_train)
+            
+            # Evaluate using the utility function
+            evaluation_results = evaluate_model_with_shap(
+                eval_model, X_test, y_test, features
+            )
+            
+            # Store evaluation results in the main model
+            model.evaluation_results_ = evaluation_results
+            logger.info(f"ML+SHAP evaluation - R²: {evaluation_results['metrics']['r2']:.3f}, "
+                       f"RMSE: {evaluation_results['metrics']['rmse']:.3f}")
+        else:
+            model.evaluation_results_ = {
+                'metrics': {'r2': 0, 'mae': 0, 'rmse': 0, 'mape': 0},
+                'note': 'Insufficient data for evaluation'
+            }
+        
         # Create SHAP explainer and values
         explainer = shap.Explainer(model)
         shap_values = explainer(X)
@@ -284,6 +315,28 @@ def train_did(
             raise ValueError("'treated' column must contain only 0 and 1 values")
         if not df['post'].isin([0, 1]).all():
             raise ValueError("'post' column must contain only 0 and 1 values")
+        
+        # Apply group balancing if severely unbalanced
+        original_df = df.copy()
+        df = balance_treatment_groups(df, 'treated', balance_threshold=0.2)
+        
+        # Validate parallel trends assumption
+        pre_treatment_data = df[df['post'] == 0]
+        treatment_start = df[df['post'] == 1][date_col].min() if len(df[df['post'] == 1]) > 0 else None
+        
+        parallel_trends_result = validate_parallel_trends(
+            pre_treatment_data, 
+            target, 
+            'treated', 
+            date_col, 
+            treatment_start
+        )
+        
+        if not parallel_trends_result['parallel_trends_holds']:
+            logger.warning(f"Parallel trends assumption may be violated: {parallel_trends_result.get('reason', 'Unknown')}")
+            logger.warning(f"P-value: {parallel_trends_result['p_value']:.4f}, Slope difference: {parallel_trends_result['slope_diff']:.4f}")
+        else:
+            logger.info(f"Parallel trends assumption holds (p-value: {parallel_trends_result['p_value']:.4f})")
         
         formula = f"{target} ~ treated * post + " + " + ".join(features)
         model = smf.ols(formula, data=df).fit()
@@ -439,6 +492,19 @@ def train_did(
         predictions['treated'] = df['treated']
         predictions['post'] = df['post']
         
+        # Add parallel trends validation results to model
+        model.parallel_trends_result_ = parallel_trends_result
+        
+        # Add balancing information
+        balancing_info = {
+            'was_balanced': len(df) == len(original_df),
+            'original_sample_size': len(original_df),
+            'balanced_sample_size': len(df),
+            'original_treatment_distribution': original_df['treated'].value_counts().to_dict(),
+            'balanced_treatment_distribution': df['treated'].value_counts().to_dict()
+        }
+        model.balancing_info_ = balancing_info
+        
         logger.info("DiD model trained successfully")
         return model, predictions, fig
         
@@ -497,11 +563,90 @@ def train_var(
             title="VAR Impulse Response Functions"
         )
         
-        # Create predictions DataFrame
+        # Create predictions DataFrame with proper evaluation
+        fitted_values = results.fittedvalues[target]
+        
+        # Generate out-of-sample forecasts for evaluation
+        test_size = min(10, len(df) // 4)  # Use last 25% or 10 periods for testing
+        train_data = df[vars_used].iloc[:-test_size] if test_size > 0 else df[vars_used]
+        test_data = df[vars_used].iloc[-test_size:] if test_size > 0 else pd.DataFrame()
+        
+        # Fit model on training data for evaluation
+        if len(test_data) > 0:
+            train_model = VAR(train_data)
+            train_results = train_model.fit(maxlags=params["maxlags"], ic=params["ic"])
+            
+            # Generate forecasts
+            lag_order = train_results.k_ar
+            if len(train_data) >= lag_order:
+                forecast = train_results.forecast(train_data.values[-lag_order:], steps=test_size)
+                forecast_df = pd.DataFrame(forecast, columns=vars_used)
+                
+                # Calculate evaluation metrics for target variable
+                actual_test = test_data[target].values
+                predicted_test = forecast_df[target].values
+                
+                # Calculate metrics
+                from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
+                
+                r2 = r2_score(actual_test, predicted_test)
+                mae = mean_absolute_error(actual_test, predicted_test)
+                rmse = np.sqrt(mean_squared_error(actual_test, predicted_test))
+                
+                # Calculate MAPE (Mean Absolute Percentage Error)
+                mape = np.mean(np.abs((actual_test - predicted_test) / np.where(actual_test != 0, actual_test, 1))) * 100
+                
+                evaluation_metrics = {
+                    'r2': float(r2),
+                    'mae': float(mae),
+                    'rmse': float(rmse),
+                    'mape': float(mape),
+                    'test_periods': test_size,
+                    'lag_order': lag_order
+                }
+            else:
+                evaluation_metrics = {
+                    'r2': 0.0,
+                    'mae': 0.0,
+                    'rmse': 0.0,
+                    'mape': 0.0,
+                    'test_periods': 0,
+                    'lag_order': 0,
+                    'note': 'Insufficient data for evaluation'
+                }
+        else:
+            evaluation_metrics = {
+                'r2': 0.0,
+                'mae': 0.0,
+                'rmse': 0.0,
+                'mape': 0.0,
+                'test_periods': 0,
+                'lag_order': results.k_ar,
+                'note': 'No test data available'
+            }
+        
+        # Add evaluation metrics to results object
+        results.evaluation_metrics_ = evaluation_metrics
+        
+        # Create comprehensive predictions DataFrame
         predictions = pd.DataFrame({
             date_col: df[date_col], 
-            "prediction": results.fittedvalues[target]
+            "prediction": fitted_values,
+            "actual": df[target],
+            "residuals": df[target] - fitted_values
         })
+        
+        # Add impulse response data
+        predictions['cumulative_effect'] = 0.0
+        if len(irf_df) > 0:
+            # Add cumulative effects from features to target
+            for i, feature in enumerate(features):
+                if feature in irf_df.columns:
+                    effect_col = f'{feature}_cumulative_effect'
+                    # Repeat IRF values for the length of the data
+                    irf_values = irf_df[feature].values
+                    repeated_values = np.tile(irf_values, (len(predictions) // len(irf_values)) + 1)[:len(predictions)]
+                    predictions[effect_col] = repeated_values
         
         logger.info(f"VAR model trained successfully with {len(vars_used)} variables")
         return results, predictions, fig
@@ -565,39 +710,167 @@ def train_synthetic_control(
         if len(control) < len(features):
             raise ValueError(f"Not enough control units ({len(control)}) for the number of features ({len(features)})")
         
-        # Fit weights using linear regression
-        weights = LinearRegression().fit(control[features], control[target]).coef_
+        # Split into pre and post treatment periods
+        if "post" not in df.columns:
+            # Create a default treatment period (last 30% of data)
+            n_obs = len(df)
+            treatment_start_idx = int(0.7 * n_obs)
+            df = df.copy()
+            df['post'] = 0
+            df.iloc[treatment_start_idx:, df.columns.get_loc('post')] = 1
+            logger.info(f"Created default treatment period starting at observation {treatment_start_idx}")
+        
+        # Get pre-treatment data for weight optimization
+        pre_treatment = df[df['post'] == 0]
+        treated_pre = pre_treatment[pre_treatment['treated'] == 1]
+        control_pre = pre_treatment[pre_treatment['treated'] == 0]
+        
+        if len(treated_pre) == 0:
+            raise ValueError("No treated units in pre-treatment period")
+        if len(control_pre) < len(features):
+            raise ValueError(f"Not enough control units in pre-treatment period ({len(control_pre)}) for features ({len(features)})")
+        
+        # Optimize weights to minimize pre-treatment prediction error
+        from scipy.optimize import minimize
+        
+        def objective(weights):
+            # Normalize weights to sum to 1
+            weights = weights / np.sum(weights) if np.sum(weights) > 0 else weights
+            
+            # Calculate synthetic control for treated unit in pre-period
+            synthetic_values = []
+            for _, treated_row in treated_pre.iterrows():
+                synthetic_val = 0
+                for i, control_row in control_pre.iterrows():
+                    synthetic_val += weights[control_pre.index.get_loc(i)] * control_row[target]
+                synthetic_values.append(synthetic_val)
+            
+            # Calculate mean squared error
+            actual_values = treated_pre[target].values
+            mse = np.mean((actual_values - synthetic_values) ** 2)
+            return mse
+        
+        # Initialize weights
+        n_control = len(control_pre)
+        initial_weights = np.ones(n_control) / n_control
+        
+        # Constraints: weights must be non-negative and sum to 1
+        constraints = {'type': 'eq', 'fun': lambda w: np.sum(w) - 1}
+        bounds = [(0, 1) for _ in range(n_control)]
+        
+        # Optimize weights
+        try:
+            result = minimize(objective, initial_weights, method='SLSQP', 
+                            bounds=bounds, constraints=constraints)
+            optimal_weights = result.x
+        except:
+            logger.warning("Weight optimization failed, using equal weights")
+            optimal_weights = initial_weights
         
         # Create synthetic control for all periods
         synthetic_values = []
-        for idx in df.index:
-            if df.loc[idx, 'treated'] == 0:
+        treatment_effects = []
+        
+        for _, row in df.iterrows():
+            if row['treated'] == 0:
                 # For control units, use actual values
-                synthetic_values.append(df.loc[idx, target])
+                synthetic_values.append(row[target])
+                treatment_effects.append(0)
             else:
-                # For treated units, compute synthetic value
-                feature_values = df.loc[idx, features].values
-                synthetic_val = np.dot(feature_values, weights)
+                # For treated units, compute synthetic value using optimal weights
+                synthetic_val = 0
+                control_data = df[(df['treated'] == 0) & (df[date_col] == row[date_col])]
+                
+                if len(control_data) > 0:
+                    # Use available control units for this time period
+                    for i, (_, control_row) in enumerate(control_data.iterrows()):
+                        if i < len(optimal_weights):
+                            synthetic_val += optimal_weights[i] * control_row[target]
+                else:
+                    # Fallback if no control data for this period
+                    synthetic_val = row[target]
+                
                 synthetic_values.append(synthetic_val)
+                treatment_effects.append(row[target] - synthetic_val)
         
         # Create comparison DataFrame
         comp_df = pd.DataFrame({
             date_col: df[date_col],
             "Actual": df[target],
             "Synthetic": synthetic_values,
+            "Treatment_Effect": treatment_effects,
+            "Post": df['post'],
+            "Treated": df['treated']
         })
         
+        # Calculate treatment effect statistics
+        post_treatment_effects = comp_df[(comp_df['Post'] == 1) & (comp_df['Treated'] == 1)]['Treatment_Effect'].values
+        
+        if len(post_treatment_effects) > 0:
+            cumulative_effect = np.sum(post_treatment_effects)
+            mean_effect = np.mean(post_treatment_effects)
+            
+            # Calculate Root Mean Squared Prediction Error (RMSPE) for pre-treatment fit
+            pre_effects = comp_df[(comp_df['Post'] == 0) & (comp_df['Treated'] == 1)]['Treatment_Effect'].values
+            rmspe = np.sqrt(np.mean(pre_effects ** 2)) if len(pre_effects) > 0 else 0
+        else:
+            cumulative_effect = mean_effect = rmspe = 0
+        
         # Create visualization
-        fig = px.line(
-            comp_df,
-            x=date_col,
-            y=["Actual", "Synthetic"],
-            title="Synthetic Control: Actual vs Synthetic",
+        fig = go.Figure()
+        
+        # Plot actual and synthetic for treated unit only
+        treated_data = comp_df[comp_df['Treated'] == 1]
+        
+        fig.add_trace(go.Scatter(
+            x=treated_data[date_col],
+            y=treated_data["Actual"],
+            mode='lines+markers',
+            name='Treated Unit (Actual)',
+            line=dict(color='blue')
+        ))
+        
+        fig.add_trace(go.Scatter(
+            x=treated_data[date_col],
+            y=treated_data["Synthetic"],
+            mode='lines',
+            name='Synthetic Control',
+            line=dict(color='red', dash='dash')
+        ))
+        
+        # Add vertical line for treatment start
+        if len(treated_data[treated_data['Post'] == 1]) > 0:
+            treatment_start = treated_data[treated_data['Post'] == 1][date_col].iloc[0]
+            fig.add_vline(
+                x=treatment_start, 
+                line_dash="dot", 
+                line_color="gray",
+                annotation_text="Treatment Start"
+            )
+        
+        fig.update_layout(
+            title="Synthetic Control Method: Treated Unit vs Synthetic Control",
+            xaxis_title=date_col,
+            yaxis_title=target,
+            hovermode='x unified'
         )
         
-        # Create predictions DataFrame
-        predictions = comp_df
-        model = {"weights": weights, "treated_count": treated_count, "control_count": control_count}
+        # Create predictions DataFrame with additional metrics
+        predictions = comp_df.copy()
+        predictions["cumulative_effect"] = predictions["Treatment_Effect"].cumsum()
+        
+        # Model summary
+        model = {
+            "weights": optimal_weights,
+            "control_units": control_pre.index.tolist(),
+            "treated_count": treated_count,
+            "control_count": control_count,
+            "cumulative_effect": float(cumulative_effect),
+            "mean_effect": float(mean_effect),
+            "rmspe": float(rmspe),
+            "pre_treatment_periods": len(pre_treatment),
+            "post_treatment_periods": len(df[df['post'] == 1])
+        }
         
         logger.info(f"Synthetic Control model trained successfully ({treated_count} treated, {control_count} control units)")
         return model, predictions, fig
@@ -615,7 +888,7 @@ def train_causal_impact(
     features: List[str]
 ) -> Tuple[Any, pd.DataFrame, Figure]:
     """
-    Train CausalImpact model (ARIMA proxy).
+    Train CausalImpact model with proper pre/post period analysis.
     
     Args:
         df: Input DataFrame
@@ -628,28 +901,168 @@ def train_causal_impact(
     """
     try:
         from pmdarima import auto_arima
+        from sklearn.metrics import r2_score
         
-        train = df[target]
-        arima_model = auto_arima(train, seasonal=False, suppress_warnings=True)
-        prediction = arima_model.predict_in_sample()
+        # Check for 'post' column to define treatment period
+        if "post" not in df.columns:
+            # Create a default treatment period (last 30% of data)
+            n_obs = len(df)
+            treatment_start_idx = int(0.7 * n_obs)
+            df = df.copy()
+            df['post'] = 0
+            df.iloc[treatment_start_idx:, df.columns.get_loc('post')] = 1
+            logger.info(f"Created default treatment period starting at observation {treatment_start_idx}")
         
-        # Create predictions DataFrame
-        ci_df = pd.DataFrame({
-            date_col: df[date_col], 
-            "prediction": prediction
+        # Split into pre and post periods
+        pre_period_data = df[df['post'] == 0].copy()
+        post_period_data = df[df['post'] == 1].copy()
+        
+        if len(pre_period_data) < 10:
+            raise ValueError("Insufficient pre-treatment data (need at least 10 observations)")
+        if len(post_period_data) < 1:
+            raise ValueError("No post-treatment data found")
+        
+        # Prepare data for modeling
+        if features:
+            # Use features as control variables
+            pre_X = pre_period_data[features]
+            pre_y = pre_period_data[target]
+            post_X = post_period_data[features]
+            post_y = post_period_data[target]
+            
+            # Train regression model on pre-period
+            from sklearn.linear_model import LinearRegression
+            model = LinearRegression()
+            model.fit(pre_X, pre_y)
+            
+            # Generate counterfactual predictions for post-period
+            counterfactual_post = model.predict(post_X)
+            
+            # Fit ARIMA to residuals for better modeling
+            residuals = pre_y - model.predict(pre_X)
+            try:
+                arima_residuals = auto_arima(residuals, seasonal=False, suppress_warnings=True)
+                residual_forecast = arima_residuals.forecast(steps=len(post_period_data))
+                counterfactual_post += residual_forecast
+            except:
+                logger.warning("ARIMA residual modeling failed, using simple regression")
+        else:
+            # Use ARIMA model on target variable only
+            model = auto_arima(pre_period_data[target], seasonal=False, suppress_warnings=True)
+            counterfactual_post = model.forecast(steps=len(post_period_data))
+        
+        # Prevent negative predictions for count data
+        counterfactual_post = np.maximum(counterfactual_post, 0)
+        
+        # Calculate treatment effects
+        actual_post = post_period_data[target].values
+        treatment_effects = actual_post - counterfactual_post
+        
+        # Create full predictions DataFrame
+        predictions = pd.DataFrame({
+            date_col: df[date_col],
+            "actual": df[target],
+            "prediction": np.concatenate([
+                pre_period_data[target].values,  # Use actual values for pre-period
+                counterfactual_post  # Use counterfactual for post-period
+            ]),
+            "post": df['post']
         })
         
+        # Add treatment effect calculations
+        predictions['treatment_effect'] = 0.0
+        predictions.loc[predictions['post'] == 1, 'treatment_effect'] = treatment_effects
+        
+        # Calculate cumulative effects
+        predictions['cumulative_effect'] = predictions['treatment_effect'].cumsum()
+        
+        # Calculate confidence intervals (simplified approach)
+        post_residuals = treatment_effects
+        se = np.std(post_residuals) if len(post_residuals) > 1 else 0
+        predictions['ci_lower'] = predictions['prediction'] - 1.96 * se
+        predictions['ci_upper'] = predictions['prediction'] + 1.96 * se
+        
+        # Calculate summary statistics
+        total_effect = np.sum(treatment_effects)
+        avg_effect = np.mean(treatment_effects)
+        post_mean = np.mean(actual_post)
+        relative_effect = (avg_effect / post_mean * 100) if post_mean != 0 else 0
+        
+        # Add summary to model
+        model_summary = {
+            'model': model,
+            'total_effect': float(total_effect),
+            'avg_effect': float(avg_effect),
+            'relative_effect': float(relative_effect),
+            'p_value': 0.05,  # Simplified - would need proper Bayesian calculation
+            'pre_periods': len(pre_period_data),
+            'post_periods': len(post_period_data)
+        }
+        
         # Create visualization
-        fig = px.line(df, x=date_col, y=target, title="CausalImpact (ARIMA proxy)")
-        fig.add_scatter(
-            x=ci_df[date_col], 
-            y=ci_df["prediction"], 
-            mode="lines", 
-            name="Counterfactual"
+        fig = go.Figure()
+        
+        # Plot actual values
+        fig.add_trace(go.Scatter(
+            x=df[date_col], 
+            y=df[target],
+            mode='lines+markers',
+            name='Actual',
+            line=dict(color='blue')
+        ))
+        
+        # Plot counterfactual (only for post-period)
+        fig.add_trace(go.Scatter(
+            x=post_period_data[date_col],
+            y=counterfactual_post,
+            mode='lines',
+            name='Counterfactual',
+            line=dict(color='red', dash='dash')
+        ))
+        
+        # Add confidence interval
+        if len(post_period_data) > 0:
+            post_ci_lower = counterfactual_post - 1.96 * se
+            post_ci_upper = counterfactual_post + 1.96 * se
+            
+            fig.add_trace(go.Scatter(
+                x=post_period_data[date_col],
+                y=post_ci_lower,
+                mode='lines',
+                line=dict(width=0),
+                showlegend=False,
+                hoverinfo='skip'
+            ))
+            
+            fig.add_trace(go.Scatter(
+                x=post_period_data[date_col],
+                y=post_ci_upper,
+                mode='lines',
+                line=dict(width=0),
+                fill='tonexty',
+                fillcolor='rgba(255,0,0,0.2)',
+                name='95% CI',
+                hoverinfo='skip'
+            ))
+        
+        # Add vertical line for treatment start
+        treatment_start_date = post_period_data[date_col].iloc[0]
+        fig.add_vline(
+            x=treatment_start_date, 
+            line_dash="dot", 
+            line_color="gray",
+            annotation_text="Treatment Start"
         )
         
-        logger.info("CausalImpact model trained successfully")
-        return arima_model, ci_df, fig
+        fig.update_layout(
+            title="CausalImpact Analysis: Actual vs Counterfactual",
+            xaxis_title=date_col,
+            yaxis_title=target,
+            hovermode='x unified'
+        )
+        
+        logger.info(f"CausalImpact model trained successfully. Total effect: {total_effect:.2f}, Avg effect: {avg_effect:.2f}")
+        return model_summary, predictions, fig
         
     except Exception as e:
         logger.error(f"Error training CausalImpact model: {str(e)}")
@@ -1105,4 +1518,334 @@ def save_model_and_predictions(
                 return "metadata_save_failed", pred_path
             except:
                 pass
-        raise 
+        raise
+
+
+# ============================================================================
+# Utility Functions for Model Improvements
+# ============================================================================
+
+def validate_parallel_trends(
+    df: pd.DataFrame, 
+    outcome_col: str, 
+    group_col: str = 'treated', 
+    time_col: str = 'time',
+    treatment_start: Any = None
+) -> Dict:
+    """
+    Validate parallel trends assumption for DiD analysis.
+    
+    Args:
+        df: DataFrame with pre-treatment data
+        outcome_col: Name of outcome variable
+        group_col: Name of treatment group column
+        time_col: Name of time column
+        treatment_start: Start of treatment period
+        
+    Returns:
+        Dictionary with parallel trends test results
+    """
+    try:
+        import statsmodels.api as sm
+        
+        # Filter to pre-treatment period if treatment_start is provided
+        if treatment_start is not None:
+            pre_data = df[df[time_col] < treatment_start].copy()
+        else:
+            pre_data = df.copy()
+        
+        if len(pre_data) < 10:
+            return {
+                'parallel_trends_holds': False,
+                'reason': 'Insufficient pre-treatment data',
+                'slope_diff': 0,
+                'p_value': 1.0
+            }
+        
+        # Create numeric time variable
+        pre_data['time_numeric'] = pd.factorize(pre_data[time_col])[0]
+        
+        # Fit separate regressions for treatment and control groups
+        control_data = pre_data[pre_data[group_col] == 0]
+        treatment_data = pre_data[pre_data[group_col] == 1]
+        
+        if len(control_data) < 3 or len(treatment_data) < 3:
+            return {
+                'parallel_trends_holds': False,
+                'reason': 'Insufficient observations in treatment or control group',
+                'slope_diff': 0,
+                'p_value': 1.0
+            }
+        
+        # Fit trend models
+        control_trend = sm.OLS(
+            control_data[outcome_col],
+            sm.add_constant(control_data['time_numeric'])
+        ).fit()
+        
+        treatment_trend = sm.OLS(
+            treatment_data[outcome_col],
+            sm.add_constant(treatment_data['time_numeric'])
+        ).fit()
+        
+        # Calculate slope difference
+        control_slope = control_trend.params.iloc[1] if len(control_trend.params) > 1 else 0
+        treatment_slope = treatment_trend.params.iloc[1] if len(treatment_trend.params) > 1 else 0
+        slope_diff = treatment_slope - control_slope
+        
+        # Calculate standard error of difference
+        control_se = control_trend.bse.iloc[1] if len(control_trend.bse) > 1 else 0
+        treatment_se = treatment_trend.bse.iloc[1] if len(treatment_trend.bse) > 1 else 0
+        slope_diff_se = np.sqrt(control_se**2 + treatment_se**2)
+        
+        # Calculate t-statistic and p-value
+        if slope_diff_se > 0:
+            t_stat = slope_diff / slope_diff_se
+            # Use minimum degrees of freedom
+            df_min = min(len(control_data) - 2, len(treatment_data) - 2)
+            p_value = 2 * (1 - stats.t.cdf(abs(t_stat), df=df_min))
+        else:
+            p_value = 1.0
+            
+        return {
+            'parallel_trends_holds': p_value > 0.05,
+            'slope_diff': float(slope_diff),
+            'p_value': float(p_value),
+            'control_slope': float(control_slope),
+            'treatment_slope': float(treatment_slope),
+            'control_observations': len(control_data),
+            'treatment_observations': len(treatment_data)
+        }
+        
+    except Exception as e:
+        logger.warning(f"Error in parallel trends validation: {str(e)}")
+        return {
+            'parallel_trends_holds': False,
+            'reason': f'Error: {str(e)}',
+            'slope_diff': 0,
+            'p_value': 1.0
+        }
+
+
+def balance_treatment_groups(
+    df: pd.DataFrame, 
+    treatment_col: str = 'treated',
+    balance_threshold: float = 0.2,
+    random_state: int = 42
+) -> pd.DataFrame:
+    """
+    Balance treatment and control groups to improve DiD design.
+    
+    Args:
+        df: Input DataFrame
+        treatment_col: Name of treatment indicator column
+        balance_threshold: Minimum acceptable balance ratio
+        random_state: Random seed for reproducibility
+        
+    Returns:
+        Balanced DataFrame
+    """
+    try:
+        # Check current distribution
+        treatment_counts = df[treatment_col].value_counts()
+        
+        if len(treatment_counts) < 2:
+            logger.warning("Only one group present, no balancing needed")
+            return df
+        
+        minority_class = treatment_counts.idxmin()
+        majority_class = treatment_counts.idxmax()
+        
+        # Calculate imbalance ratio
+        imbalance_ratio = treatment_counts.min() / treatment_counts.max()
+        
+        if imbalance_ratio >= balance_threshold:
+            logger.info(f"Groups already balanced (ratio: {imbalance_ratio:.3f})")
+            return df
+        
+        logger.info(f"Balancing groups (current ratio: {imbalance_ratio:.3f})")
+        
+        # Undersample majority class
+        n_samples = treatment_counts.min()
+        
+        balanced_df = pd.concat([
+            df[df[treatment_col] == minority_class],
+            df[df[treatment_col] == majority_class].sample(
+                n=n_samples, random_state=random_state
+            )
+        ])
+        
+        # Verify balancing
+        new_counts = balanced_df[treatment_col].value_counts()
+        new_ratio = new_counts.min() / new_counts.max()
+        
+        logger.info(f"Balanced groups - new ratio: {new_ratio:.3f}")
+        logger.info(f"Sample sizes: {dict(new_counts)}")
+        
+        return balanced_df.reset_index(drop=True)
+        
+    except Exception as e:
+        logger.error(f"Error in group balancing: {str(e)}")
+        return df
+
+
+def calculate_treatment_effects_with_ci(
+    df: pd.DataFrame,
+    outcome_col: str,
+    treatment_col: str = 'treated',
+    time_col: str = 'time',
+    confidence_level: float = 0.95
+) -> pd.DataFrame:
+    """
+    Calculate treatment effects with confidence intervals for each time period.
+    
+    Args:
+        df: DataFrame with outcome, treatment, and time data
+        outcome_col: Name of outcome variable
+        treatment_col: Name of treatment indicator
+        time_col: Name of time variable
+        confidence_level: Confidence level for intervals
+        
+    Returns:
+        DataFrame with treatment effects and confidence intervals
+    """
+    try:
+        results = []
+        alpha = 1 - confidence_level
+        z_score = stats.norm.ppf(1 - alpha/2)
+        
+        for time_point in df[time_col].unique():
+            period_data = df[df[time_col] == time_point]
+            
+            if len(period_data) < 2:
+                continue
+                
+            treated_data = period_data[period_data[treatment_col] == 1][outcome_col]
+            control_data = period_data[period_data[treatment_col] == 0][outcome_col]
+            
+            if len(treated_data) == 0 or len(control_data) == 0:
+                continue
+            
+            # Calculate means
+            treated_mean = treated_data.mean()
+            control_mean = control_data.mean()
+            effect = treated_mean - control_mean
+            
+            # Calculate standard error
+            treated_var = treated_data.var() / len(treated_data) if len(treated_data) > 1 else 0
+            control_var = control_data.var() / len(control_data) if len(control_data) > 1 else 0
+            se = np.sqrt(treated_var + control_var)
+            
+            # Calculate confidence interval
+            ci_margin = z_score * se
+            ci_lower = effect - ci_margin
+            ci_upper = effect + ci_margin
+            
+            # Calculate t-statistic and p-value
+            if se > 0:
+                t_stat = effect / se
+                df_combined = len(treated_data) + len(control_data) - 2
+                p_value = 2 * (1 - stats.t.cdf(abs(t_stat), df=df_combined))
+            else:
+                t_stat = 0
+                p_value = 1.0
+            
+            results.append({
+                time_col: time_point,
+                'treatment_effect': effect,
+                'standard_error': se,
+                'ci_lower': ci_lower,
+                'ci_upper': ci_upper,
+                'p_value': p_value,
+                't_statistic': t_stat,
+                'treated_n': len(treated_data),
+                'control_n': len(control_data),
+                'treated_mean': treated_mean,
+                'control_mean': control_mean
+            })
+        
+        return pd.DataFrame(results)
+        
+    except Exception as e:
+        logger.error(f"Error calculating treatment effects: {str(e)}")
+        return pd.DataFrame()
+
+
+def evaluate_model_with_shap(
+    model: Any, 
+    X_test: pd.DataFrame, 
+    y_test: pd.Series,
+    feature_names: List[str] = None
+) -> Dict:
+    """
+    Evaluate ML model with SHAP explanations and proper variable handling.
+    
+    Args:
+        model: Trained model object
+        X_test: Test features
+        y_test: Test target values
+        feature_names: Names of features
+        
+    Returns:
+        Dictionary with metrics, SHAP values, and diagnostics
+    """
+    try:
+        import shap
+        from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
+        
+        # Generate predictions
+        y_pred = model.predict(X_test)
+        
+        # Calculate metrics (fix the 'actual_values' undefined variable issue)
+        metrics = {
+            'r2': r2_score(y_test, y_pred),
+            'mae': mean_absolute_error(y_test, y_pred),
+            'rmse': np.sqrt(mean_squared_error(y_test, y_pred)),
+            'mape': np.mean(np.abs((y_test - y_pred) / np.where(y_test != 0, y_test, 1))) * 100
+        }
+        
+        # Generate SHAP values
+        try:
+            explainer = shap.Explainer(model)
+            shap_values = explainer(X_test)
+            
+            # Calculate feature importance
+            feature_importance = np.abs(shap_values.values).mean(0)
+            if feature_names is None:
+                feature_names = [f'feature_{i}' for i in range(len(feature_importance))]
+            
+            importance_df = pd.DataFrame({
+                'feature': feature_names,
+                'importance': feature_importance
+            }).sort_values('importance', ascending=False)
+            
+        except Exception as e:
+            logger.warning(f"SHAP calculation failed: {str(e)}")
+            shap_values = None
+            importance_df = pd.DataFrame()
+        
+        # Create diagnostics DataFrame
+        diagnostics = pd.DataFrame({
+            'actual': y_test,
+            'predicted': y_pred,
+            'residuals': y_test - y_pred,
+            'abs_residuals': np.abs(y_test - y_pred)
+        })
+        
+        return {
+            'metrics': metrics,
+            'shap_values': shap_values,
+            'feature_importance': importance_df,
+            'diagnostics': diagnostics,
+            'n_test_samples': len(y_test)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in model evaluation: {str(e)}")
+        return {
+            'metrics': {'r2': 0, 'mae': 0, 'rmse': 0, 'mape': 0},
+            'shap_values': None,
+            'feature_importance': pd.DataFrame(),
+            'diagnostics': pd.DataFrame(),
+            'error': str(e)
+        } 
