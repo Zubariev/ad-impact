@@ -22,6 +22,7 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 import statsmodels.formula.api as smf
 from statsmodels.tsa.api import VAR
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 from config import MODEL_DIR, MODEL_HYPERPARAMS, PREDICTIONS_DIR
 
@@ -30,52 +31,218 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def check_multicollinearity(X: pd.DataFrame, threshold: float = 10.0) -> List[str]:
+    """Check for multicollinearity using VIF."""
+    vif_data = []
+    for i in range(X.shape[1]):
+        try:
+            vif = variance_inflation_factor(X.values, i)
+            vif_data.append((X.columns[i], vif))
+        except:
+            # If VIF calculation fails, mark as problematic
+            vif_data.append((X.columns[i], float('inf')))
+    
+    problematic_vars = [var for var, vif in vif_data if vif > threshold or pd.isna(vif)]
+    return problematic_vars
+
+
 @st.cache_resource
 def train_mlr(
     df: pd.DataFrame, 
     date_col: str, 
     target: str, 
-    features: List[str]
+    features: List[str],
+    client_specific_vars: List[str] = None,
+    other_feature_vars: List[str] = None
 ) -> Tuple[LinearRegression, pd.DataFrame, Figure]:
     """
-    Train Multiple Linear Regression model.
+    Train Multiple Linear Regression model with client-specific effect isolation.
     
     Args:
         df: Input DataFrame
         date_col: Date column name
         target: Target variable name
         features: Feature variable names
+        client_specific_vars: List of client-specific advertising variables
+        other_feature_vars: List of other feature variables (general market effects)
         
     Returns:
         Tuple of (trained model, predictions DataFrame, plotly figure)
     """
     try:
-        X = df[features]
-        y = df[target]
-        reg = LinearRegression()
-        reg.fit(X, y)
+        from data_utils import create_time_period_indicator, create_client_interaction_terms
         
-        # Create contributions DataFrame
-        contributions = pd.DataFrame({date_col: df[date_col]})
-        for coef, feat in zip(reg.coef_, features):
-            contributions[feat] = df[feat] * coef
+        df_processed = df.copy()
         
-        # Create visualization
-        fig = px.area(
-            contributions,
-            x=date_col,
-            y=features,
-            title="MLR Estimated Channel Contributions",
-        )
+        # Validate target variable before processing
+        if df_processed[target].isnull().any():
+            logger.warning(f"Found {df_processed[target].isnull().sum()} NaN values in target variable. Filling with forward/backward fill.")
+            df_processed[target] = df_processed[target].ffill().bfill()
         
-        # Create predictions DataFrame
-        predictions = pd.DataFrame({
-            date_col: df[date_col], 
-            "prediction": reg.predict(X)
-        })
+        if np.isinf(df_processed[target]).any():
+            logger.warning(f"Found infinite values in target variable. Replacing with NaN and filling.")
+            df_processed[target] = df_processed[target].replace([np.inf, -np.inf], np.nan).ffill().bfill()
         
-        logger.info(f"MLR model trained successfully with {len(features)} features")
-        return reg, predictions, fig
+        # Check if target variable has sufficient variance
+        target_std = df_processed[target].std()
+        if target_std == 0 or np.isnan(target_std):
+            raise ValueError(f"Target variable '{target}' has no variance (std={target_std}). Cannot fit regression model.")
+        
+        if target_std < 1e-10:
+            logger.warning(f"Target variable '{target}' has very low variance (std={target_std}). Model may be unreliable.")
+        
+        # Create time period indicator if client-specific variables are provided
+        if client_specific_vars and len(client_specific_vars) > 0:
+            # Create time period indicator
+            df_processed = create_time_period_indicator(df_processed, date_col)
+            
+            # Create interaction terms for client-specific variables
+            df_processed = create_client_interaction_terms(df_processed, client_specific_vars)
+            
+            # Build model formula with interaction terms
+            model_features = []
+            
+            # Add other feature variables as main effects
+            if other_feature_vars:
+                model_features.extend(other_feature_vars)
+            
+            # Add client-specific variables as interaction terms only
+            for var in client_specific_vars:
+                interaction_name = f"{var}_x_time_period"
+                if interaction_name in df_processed.columns:
+                    model_features.append(interaction_name)
+                
+                # Also add centered main effects for client-specific variables
+                centered_var = f"{var}_centered"
+                if centered_var in df_processed.columns:
+                    model_features.append(centered_var)
+            
+            # Add time period indicator as main effect
+            if 'time_period' in df_processed.columns:
+                model_features.append('time_period')
+            
+            # Use statsmodels for better statistical analysis
+            import statsmodels.api as sm
+            
+            # Prepare data for statsmodels
+            X = df_processed[model_features]
+            y = df_processed[target]
+            
+            # Add constant for intercept
+            X = sm.add_constant(X)
+            
+            # Check for perfect correlation between features and target
+            for feature in model_features:
+                if feature in df_processed.columns:
+                    correlation = abs(df_processed[feature].corr(df_processed[target]))
+                    if correlation > 0.999:
+                        logger.warning(f"Feature '{feature}' has near-perfect correlation ({correlation:.6f}) with target. This may cause numerical issues.")
+            
+            # Add multicollinearity check before fitting
+            if len(model_features) > 1:
+                problematic_vars = check_multicollinearity(X)
+                if problematic_vars:
+                    logger.warning(f"Multicollinearity detected in variables: {problematic_vars}")
+                    # Remove problematic variables (but not the constant)
+                    for var in problematic_vars:
+                        if var in model_features and var != 'const':
+                            model_features.remove(var)
+                            logger.info(f"Removed multicollinear variable: {var}")
+                    
+                    # Recreate X with cleaned features
+                    X = df_processed[model_features]
+                    X = sm.add_constant(X)
+            
+            # Check for perfect multicollinearity by examining the condition number
+            try:
+                # Fit model
+                model = sm.OLS(y, X).fit()
+                
+                # Check if model has perfect multicollinearity
+                if hasattr(model, 'condition_number') and model.condition_number > 1e15:
+                    logger.warning(f"Perfect multicollinearity detected (condition number: {model.condition_number})")
+                    # Try removing more variables to resolve perfect multicollinearity
+                    if len(model_features) > 2:
+                        # Remove the last added feature and try again
+                        removed_var = model_features.pop()
+                        logger.info(f"Removing variable due to perfect multicollinearity: {removed_var}")
+                        X = df_processed[model_features]
+                        X = sm.add_constant(X)
+                        model = sm.OLS(y, X).fit()
+                
+            except Exception as e:
+                logger.error(f"Error fitting model: {e}")
+                # Fallback: try with fewer features
+                if len(model_features) > 2:
+                    logger.info("Trying with reduced feature set due to multicollinearity")
+                    # Keep only the first few features
+                    reduced_features = model_features[:2]
+                    X = df_processed[reduced_features]
+                    X = sm.add_constant(X)
+                    model = sm.OLS(y, X).fit()
+                else:
+                    raise e
+            
+            # Create predictions
+            predictions = pd.DataFrame({
+                date_col: df_processed[date_col],
+                "prediction": model.predict(X)
+            })
+            
+            # Create contributions DataFrame for visualization
+            contributions = pd.DataFrame({date_col: df_processed[date_col]})
+            
+            # Add contributions for each feature
+            for feature in model_features:
+                if feature in df_processed.columns:
+                    coef = model.params.get(feature, 0)
+                    contributions[feature] = df_processed[feature] * coef
+            
+            # Create visualization
+            fig = px.area(
+                contributions,
+                x=date_col,
+                y=model_features,
+                title="MLR Client-Specific Channel Effects (Interaction Terms)",
+            )
+            
+            # Store model with additional information for analysis
+            model.client_specific_vars = client_specific_vars
+            model.other_feature_vars = other_feature_vars
+            model.interaction_terms = [f"{var}_x_time_period" for var in client_specific_vars]
+            model.time_period_col = 'time_period'
+            
+            logger.info(f"MLR model trained successfully with {len(model_features)} features (including {len(client_specific_vars)} client-specific interaction terms)")
+            return model, predictions, fig
+            
+        else:
+            # Fallback to original MLR implementation
+            X = df[features]
+            y = df[target]
+            reg = LinearRegression()
+            reg.fit(X, y)
+            
+            # Create contributions DataFrame
+            contributions = pd.DataFrame({date_col: df[date_col]})
+            for coef, feat in zip(reg.coef_, features):
+                contributions[feat] = df[feat] * coef
+            
+            # Create visualization
+            fig = px.area(
+                contributions,
+                x=date_col,
+                y=features,
+                title="MLR Estimated Channel Contributions",
+            )
+            
+            # Create predictions DataFrame
+            predictions = pd.DataFrame({
+                date_col: df[date_col], 
+                "prediction": reg.predict(X)
+            })
+            
+            logger.info(f"MLR model trained successfully with {len(features)} features")
+            return reg, predictions, fig
         
     except Exception as e:
         logger.error(f"Error training MLR model: {str(e)}")

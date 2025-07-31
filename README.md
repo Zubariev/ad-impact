@@ -11,6 +11,7 @@ A comprehensive Streamlit dashboard for analyzing advertising impact on supermar
 - **Missing Data Handling**: Multiple strategies for handling missing values
 - **Comprehensive Multicollinearity Analysis**: VIF analysis, correlation matrices, overfitting detection, and variable reduction suggestions
 - **Comprehensive Diagnostics**: Model-specific metrics, VIF analysis, residual plots, SHAP explanations
+- **Seasonal Decomposition**: Advanced time series decomposition to improve model performance by removing seasonal patterns
 - **JSON Reports**: Enterprise-grade analysis reports with dataset overview, model diagnostics, and results
 - **Report Combination**: Upload and combine multiple analysis reports and predictions into unified JSON reports
 - **Interpretation Hints**: User-friendly guidance for understanding results
@@ -23,7 +24,7 @@ econ/
 ├── app.py                          # Main entry point (imports from src/app.py)
 ├── data_prep.py                    # Data preprocessing utilities
 ├── analyze_combined_report.py      # Standalone report analysis script
-├── multicollinearity_analysis_MLR_20250724_1540.json  # Example analysis file
+├── pivot_longer.py                 # Data transformation utilities
 ├── src/                            # Core application modules
 │   ├── __init__.py
 │   ├── app.py                      # Main Streamlit application with 9 tabs
@@ -46,24 +47,8 @@ econ/
 │   ├── test_model_training.py
 │   └── test_visualization.py
 ├── saved_models/                   # Trained model storage
-│   ├── MLR.pkl
-│   ├── ML + SHAP.pkl
-│   ├── VAR.pkl
-│   ├── CausalImpact.pkl
-│   └── Distributed Lag.pkl
 ├── saved_predictions/              # Prediction results storage
-│   ├── MLR_predictions.csv
-│   ├── ML + SHAP_predictions.csv
-│   ├── VAR_predictions.csv
-│   ├── CausalImpact_predictions.csv
-│   └── Distributed Lag_predictions.csv
 ├── reports/                        # Generated comprehensive reports
-│   ├── combined_comprehensive_report.json
-│   ├── MLR_comprehensive_report.json
-│   ├── ML + SHAP_comprehensive_report.json
-│   ├── VAR_comprehensive_report.json
-│   ├── CausalImpact_comprehensive_report.json
-│   └── Distributed Lag_comprehensive_report.json
 ├── requirements.txt                # Python dependencies
 ├── .flake8                        # Linting configuration
 ├── pyproject.toml                 # Black formatting configuration
@@ -99,17 +84,55 @@ econ/
 3. **Select Columns**: Choose your target variable and feature variables
 4. **Filter Data**: Use the smart range selector to filter observations
 5. **Handle Missing Data**: Choose how to handle any missing values
-6. **Train Model**: Click "Apply & Train Model" to run the selected model
-7. **Review Results**: Examine the interactive charts, diagnostics, and multicollinearity analysis
-8. **Download Results**: Save the trained model, predictions, and comprehensive JSON report
+6. **Seasonal Decomposition** (Optional): Apply seasonal decomposition to remove seasonal patterns from the target variable for better model performance
+7. **Train Model**: Click "Apply & Train Model" to run the selected model
+8. **Review Results**: Examine the interactive charts, diagnostics, and multicollinearity analysis
+9. **Download Results**: Save the trained model, predictions, and comprehensive JSON report
 
 ### Combine Reports Workflow
 
-1. **Navigate to "📊 Combine Reports" Tab**: The 9th tab in the dashboard
+1. **Navigate to "Combine Reports" Tab**: The 9th tab in the dashboard
 2. **Upload Analysis Reports**: Upload JSON files (multicollinearity analysis, model reports)
 3. **Upload Prediction Files**: Upload CSV files from your saved_predictions folder
 4. **Combine Reports**: Click to merge all files into a unified comprehensive report
 5. **Download Combined JSON**: Get a timestamped combined report file
+
+## Seasonal Decomposition
+
+The dashboard now includes advanced seasonal decomposition capabilities to improve model performance by removing seasonal patterns from time series data.
+
+### Benefits of Seasonal Decomposition
+
+- **Better Campaign Impact Measurement**: Isolate true advertising effects from regular seasonal patterns
+- **Improved Model Accuracy**: Train models on non-seasonal components for better predictions
+- **Anomaly Detection**: Identify unusual events through residual analysis
+- **Trend Understanding**: See fundamental business direction without seasonal noise
+- **Cross-Seasonal Comparison**: Compare performance across different time periods
+
+### Decomposition Methods
+
+1. **STL (Seasonal and Trend decomposition using Loess)**: Robust decomposition method that handles outliers well
+2. **Classical Decomposition**: Traditional additive decomposition approach
+3. **X-13ARIMA-SEATS**: Advanced decomposition method (requires X-13ARIMA-SEATS installation)
+
+### How It Works
+
+1. **Automatic Period Detection**: The system automatically detects seasonal periods (weekly, monthly, quarterly, yearly)
+2. **Component Separation**: Decomposes target variable into:
+   - **Trend**: Long-term direction
+   - **Seasonal**: Repeating patterns
+   - **Residual**: Random fluctuations
+   - **Non-Seasonal**: Trend + Residual (used for modeling)
+3. **Model Training**: Models are trained on the non-seasonal component
+4. **Visualization**: Comprehensive plots show all decomposition components
+
+### Usage
+
+1. Select your target variable and features
+2. Check "Apply Seasonal Decomposition" in the optional section
+3. Choose decomposition method and period (or use auto-detection)
+4. Train your model - it will automatically use the non-seasonal component
+5. Review decomposition plots and statistics
 
 ## Model Descriptions
 

@@ -24,7 +24,7 @@ def analyze_combined_report():
         print(f"Error loading combined report: {e}")
         return
     
-    print("📊 COMBINED REPORT ANALYSIS")
+    print(" COMBINED REPORT ANALYSIS")
     print("=" * 50)
     
     # Metadata analysis
@@ -43,8 +43,8 @@ def analyze_combined_report():
             print(f"  ✅ {section}")
             if section == "dataset_overview":
                 overview = report[section]
-                print(f"     📊 Observations: {overview.get('total_observations', 'N/A')}")
-                print(f"     📊 Columns: {overview.get('columns_count', 'N/A')}")
+                print(f"     Observations: {overview.get('total_observations', 'N/A')}")
+                print(f"     Columns: {overview.get('columns_count', 'N/A')}")
         else:
             print(f" {section} - Missing")
     print()
@@ -52,7 +52,7 @@ def analyze_combined_report():
     # Models analysis
     if "models" in report:
         models = report["models"]
-        print(f"🤖 MODEL-SPECIFIC SECTIONS ({len(models)} models):")
+        print(f"MODEL-SPECIFIC SECTIONS ({len(models)} models):")
         
         for model_name, model_data in models.items():
             print(f"\n  📈 {model_name}:")
@@ -66,8 +66,8 @@ def analyze_combined_report():
                     config = model_data[section]
                     target = config.get('target_variable', 'N/A')
                     features_count = len(config.get('feature_variables', []))
-                    print(f"        🎯 Target: {target}")
-                    print(f"        🔧 Features: {features_count}")
+                    print(f"        Target: {target}")
+                    print(f"        Features: {features_count}")
                 
                 elif section == "model_diagnostics":
                     diag = model_data[section]

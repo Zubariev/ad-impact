@@ -9,7 +9,10 @@ import numpy as np
 from scipy import stats
 from typing import Dict, Any, List, Union
 import warnings
+import logging
 warnings.filterwarnings('ignore')
+
+logger = logging.getLogger(__name__)
 
 
 class DataAnalyzer:
@@ -245,6 +248,171 @@ class DataAnalyzer:
         }
         
         return analysis
+
+
+def analyze_client_specific_effects(model, df: pd.DataFrame, target: str, client_specific_vars: List[str] = None) -> Dict[str, Any]:
+    """
+    Analyze client-specific advertising effects from MLR model.
+    
+    Args:
+        model: Trained MLR model (statsmodels OLS or sklearn LinearRegression)
+        df: Input DataFrame
+        target: Target variable name
+        client_specific_vars: List of client-specific variables
+        
+    Returns:
+        Dictionary containing client-specific effect analysis
+    """
+    analysis = {}
+    
+    try:
+        if hasattr(model, 'summary') and client_specific_vars:  # statsmodels OLS model
+            try:
+                # Extract interaction terms
+                interaction_terms = [f"{var}_x_time_period" for var in client_specific_vars]
+                
+                # Debug: Print what we're looking for
+                logger.info(f"Looking for interaction terms: {interaction_terms}")
+                logger.info(f"Model params index: {list(model.params.index)}")
+                
+                # Check which interaction terms are actually in the model
+                available_terms = []
+                dropped_terms = []
+                
+                for term in interaction_terms:
+                    if term in model.params.index:
+                        available_terms.append(term)
+                        logger.info(f"Found interaction term: {term}")
+                    else:
+                        dropped_terms.append(term)
+                        logger.info(f"Missing interaction term: {term}")
+                        # Debug: Check if it's a string encoding issue
+                        for param in model.params.index:
+                            if term in param or param in term:
+                                logger.info(f"  Similar param found: {param}")
+                
+                logger.info(f"Available terms: {available_terms}")
+                logger.info(f"Dropped terms: {dropped_terms}")
+                
+                analysis["available_interaction_terms"] = available_terms
+                analysis["dropped_interaction_terms"] = dropped_terms
+            
+            except Exception as e:
+                analysis["error"] = str(e)
+                logger.error(f"Error during statsmodels analysis: {e}")
+            
+            if dropped_terms:
+                analysis["warnings"] = [
+                    f"Interaction terms dropped due to multicollinearity: {', '.join(dropped_terms)}",
+                    "Consider using different time period splits or variable transformations"
+                ]
+            
+            # Filter for client-specific interaction terms
+            client_effects = {}
+            for term in available_terms:
+                if term in model.params.index:
+                    coef = model.params[term]
+                    p_value = model.pvalues[term]
+                    std_err = model.bse[term]
+                    t_stat = model.tvalues[term]
+                    
+                    # Check if coefficient is NaN (dropped due to perfect multicollinearity)
+                    if pd.isna(coef) or pd.isna(p_value):
+                        client_effects[term] = {
+                            "coefficient": None,
+                            "p_value": None,
+                            "std_error": None,
+                            "t_statistic": None,
+                            "confidence_interval_lower": None,
+                            "confidence_interval_upper": None,
+                            "significance": "Dropped (Perfect Multicollinearity)",
+                            "effect_direction": "Unknown",
+                            "original_variable": term.replace("_x_time_period", ""),
+                            "interpretation": f"The interaction term for {term.replace('_x_time_period', '')} was dropped due to perfect multicollinearity"
+                        }
+                    else:
+                        # Calculate confidence intervals
+                        ci_lower = coef - 1.96 * std_err
+                        ci_upper = coef + 1.96 * std_err
+                        
+                        # Determine significance
+                        significance = "Not Significant"
+                        if p_value < 0.01:
+                            significance = "Highly Significant (p < 0.01)"
+                        elif p_value < 0.05:
+                            significance = "Significant (p < 0.05)"
+                        elif p_value < 0.1:
+                            significance = "Marginally Significant (p < 0.1)"
+                        
+                        # Determine effect direction
+                        effect_direction = "Positive" if coef > 0 else "Negative"
+                        
+                        client_effects[term] = {
+                            "coefficient": float(coef),
+                            "p_value": float(p_value),
+                            "std_error": float(std_err),
+                            "t_statistic": float(t_stat),
+                            "confidence_interval_lower": float(ci_lower),
+                            "confidence_interval_upper": float(ci_upper),
+                            "significance": significance,
+                            "effect_direction": effect_direction,
+                            "original_variable": term.replace("_x_time_period", ""),
+                            "interpretation": f"The effect of {term.replace('_x_time_period', '')} on {target} specifically for the client, after controlling for general market effects"
+                        }
+            
+            analysis["client_specific_effects"] = client_effects
+            analysis["total_client_variables"] = len(client_specific_vars)
+            analysis["available_effects"] = len(available_terms)
+            analysis["dropped_effects"] = len(dropped_terms)
+            analysis["significant_effects"] = sum(1 for effect in client_effects.values() 
+                                               if effect.get("p_value") is not None and effect["p_value"] < 0.05)
+            analysis["positive_effects"] = sum(1 for effect in client_effects.values() 
+                                             if effect.get("coefficient") is not None and effect["coefficient"] > 0)
+            analysis["negative_effects"] = sum(1 for effect in client_effects.values() 
+                                             if effect.get("coefficient") is not None and effect["coefficient"] < 0)
+            
+            # Business interpretation
+            analysis["business_insights"] = {
+                "effective_channels": [effect["original_variable"] for effect in client_effects.values() 
+                                    if effect.get("p_value") is not None and effect["p_value"] < 0.05 and effect.get("coefficient", 0) > 0],
+                "ineffective_channels": [effect["original_variable"] for effect in client_effects.values() 
+                                       if effect.get("p_value") is not None and effect["p_value"] < 0.05 and effect.get("coefficient", 0) < 0],
+                "uncertain_channels": [effect["original_variable"] for effect in client_effects.values() 
+                                     if effect.get("p_value") is not None and effect["p_value"] >= 0.05],
+                "dropped_channels": [effect["original_variable"] for effect in client_effects.values() 
+                                   if effect.get("significance") == "Dropped (Perfect Multicollinearity)"],
+                "recommendations": []
+            }
+            
+            # Generate recommendations
+            if analysis["business_insights"]["effective_channels"]:
+                analysis["business_insights"]["recommendations"].append(
+                    f"Focus investment on: {', '.join(analysis['business_insights']['effective_channels'])}"
+                )
+            
+            if analysis["business_insights"]["ineffective_channels"]:
+                analysis["business_insights"]["recommendations"].append(
+                    f"Consider reducing or reallocating investment from: {', '.join(analysis['business_insights']['ineffective_channels'])}"
+                )
+            
+            if analysis["business_insights"]["uncertain_channels"]:
+                analysis["business_insights"]["recommendations"].append(
+                    f"Need more data to determine effectiveness of: {', '.join(analysis['business_insights']['uncertain_channels'])}"
+                )
+            
+            if analysis["business_insights"]["dropped_channels"]:
+                analysis["business_insights"]["recommendations"].append(
+                    f"Channels with insufficient variation for analysis: {', '.join(analysis['business_insights']['dropped_channels'])}"
+                )
+        
+        else:  # sklearn LinearRegression model (fallback)
+            analysis["note"] = "Client-specific analysis not available for this model type"
+            
+    except Exception as e:
+        analysis["error"] = str(e)
+        # logger.error(f"Error in analyze_client_specific_effects: {e}") # This line was not in the new_code, so it's removed.
+    
+    return analysis
 
 
 def analyze_dataset_for_report(df: pd.DataFrame, filename: str = "dataset") -> Dict[str, Any]:

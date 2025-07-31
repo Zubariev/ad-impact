@@ -47,6 +47,11 @@ from visualization import (
     display_did_visualizations
 )
 from combine_reports import combine_uploaded_files
+from seasonal_decomposition import (
+    apply_seasonal_decomposition,
+    create_decomposition_ui,
+    display_decomposition_info
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -551,7 +556,7 @@ def _extract_comprehensive_metrics(baseline_results, model, df, target, features
         return {"error": str(e)}
 
 
-def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target: str, features: List[str], prediction_length: int = None, test_percentage: int = None):
+def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target: str, features: List[str], prediction_length: int = None, test_percentage: int = None, client_specific_vars: List[str] = None, other_feature_vars: List[str] = None, use_decomposition: bool = False, decomposition_method: str = 'STL', decomposition_period: int = None):
     """
     Safely train a model with error handling and user feedback.
     
@@ -561,24 +566,63 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
         date_col: Date column name
         target: Target variable name
         features: Feature variable names
+        use_decomposition: Whether to apply seasonal decomposition
+        decomposition_method: Method for seasonal decomposition
+        decomposition_period: Seasonal period for decomposition
     """
     try:
         with st.spinner(f"Training {model_name} model, please wait..."):
+            # Apply seasonal decomposition if requested
+            df_for_training = df.copy()
+            decomposer = None
+            decomposition_plot = None
+            
+            if use_decomposition:
+                st.info("🔍 Applying seasonal decomposition to target variable...")
+                df_for_training, decomposer, decomposition_plot = apply_seasonal_decomposition(
+                    df_for_training,
+                    target,
+                    date_col,
+                    method=decomposition_method,
+                    period=decomposition_period
+                )
+                
+                if decomposer is not None:
+                    st.success("✅ Seasonal decomposition applied successfully!")
+                    
+                    # Display decomposition information
+                    display_decomposition_info(decomposer)
+                    
+                    # Show decomposition plot
+                    if decomposition_plot is not None:
+                        st.plotly_chart(decomposition_plot, use_container_width=True)
+                else:
+                    st.warning("⚠️ Seasonal decomposition failed, using original data")
+            
             model_func = TRAIN_FUNCTIONS[model_name]
             
             # Pass custom parameters for Chronos model
             if model_name == "Chronos T5 Large" and (prediction_length is not None or test_percentage is not None):
                 model, predictions, fig = model_func(
-                    df.copy(),
+                    df_for_training,
                     date_col=date_col,
                     target=target,
                     features=features,
                     prediction_length=prediction_length,
                     test_percentage=test_percentage,
                 )
+            elif model_name == "MLR" and (client_specific_vars is not None or other_feature_vars is not None):
+                model, predictions, fig = model_func(
+                    df_for_training,
+                    date_col=date_col,
+                    target=target,
+                    features=features,
+                    client_specific_vars=client_specific_vars,
+                    other_feature_vars=other_feature_vars,
+                )
             else:
                 model, predictions, fig = model_func(
-                    df.copy(),
+                    df_for_training,
                     date_col=date_col,
                     target=target,
                     features=features,
@@ -892,7 +936,7 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
 
 def create_combine_reports_tab():
     """Create the Combine Reports tab functionality."""
-    st.header("📊 Combine Reports & Predictions")
+    st.header("Combine Reports & Predictions")
     st.markdown("Upload your model reports and prediction files to create a comprehensive combined JSON report.")
     
     col1, col2 = st.columns(2)
@@ -944,7 +988,7 @@ def create_combine_reports_tab():
                         st.success("✅ Reports combined successfully!")
                         
                         # Display summary
-                        st.subheader("📊 Combined Report Summary")
+                        st.subheader("Combined Report Summary")
                         
                         metadata = combined_report.get("combined_report_metadata", {})
                         
@@ -1105,11 +1149,30 @@ def main():
                         key=f"target_{model_name}",
                     )
                     
-                    feature_vars = st.multiselect(
-                        "Feature Variables",
+                    # Client-specific advertising variables selection
+                    st.subheader(" Client-Specific Advertising Variables")
+                    st.info("Select variables that represent the client's specific advertising investments. These will be isolated from general market effects in the analysis.")
+                    
+                    client_specific_vars = st.multiselect(
+                        "Client-Specific Advertising Variables",
                         options=[c for c in df.columns if c not in {range_col, target_var}],
-                        key=f"features_{model_name}",
+                        key=f"client_specific_{model_name}",
+                        help="These variables represent advertising investments made directly by the client being analyzed. They will be treated as interaction terms with time periods to isolate client-specific effects from general market trends."
                     )
+                    
+                    # Other feature variables selection
+                    st.subheader("Other Feature Variables")
+                    st.info("Select general market variables and other features that affect all entities in the market.")
+                    
+                    other_feature_vars = st.multiselect(
+                        "Other Feature Variables",
+                        options=[c for c in df.columns if c not in {range_col, target_var} and c not in client_specific_vars],
+                        key=f"other_features_{model_name}",
+                        help="These variables represent general market conditions, competitor activities, and other factors that affect all entities in the market."
+                    )
+                    
+                    # Combine all feature variables
+                    feature_vars = client_specific_vars + other_feature_vars
 
                     # Feature limit validation - now non-blocking
                     feature_limits_ok = enforce_feature_limits(model_name, feature_vars)
@@ -1181,15 +1244,58 @@ def main():
                                                 st.metric("Future Forecasts", prediction_length)
                                             
                                             # Summary information
-                                            st.info(f"📊 **Setup Summary**: Using {train_size} points for training context, {test_size} points for validation, forecasting {prediction_length} future points")
+                                            st.info(f"**Setup Summary**: Using {train_size} points for training context, {test_size} points for validation, forecasting {prediction_length} future points")
                                             
                                             if test_size < 2:
                                                 st.warning(f"⚠️ Test size is very small ({test_size} points). Consider using a larger test percentage for better validation.")
                                         
+                                        # Seasonal decomposition section
+                                        st.markdown("---")
+                                        st.subheader("🔍 Seasonal Decomposition (Optional)")
+                                        st.info("Apply seasonal decomposition to improve model performance by removing seasonal patterns from the target variable.")
+                                        
+                                        use_decomposition = st.checkbox(
+                                            "Apply Seasonal Decomposition",
+                                            value=False,
+                                            key=f"use_decomposition_{model_name}",
+                                            help="Decompose target variable into trend, seasonal, and residual components. Model will be trained on the non-seasonal component."
+                                        )
+                                        
+                                        decomposition_method = 'STL'
+                                        decomposition_period = None
+                                        
+                                        if use_decomposition:
+                                            decomposition_method, decomposition_period = create_decomposition_ui()
+                                        
                                         # Show Apply button only if data is ready
                                         if len(df_for_training) >= 5:
                                             if st.button("🚀 Apply & Train Model", key=f"apply_{model_name}", type="primary"):
-                                                train_model_safely(model_name, df_for_training, range_col, target_var, feature_vars, prediction_length, test_percentage)
+                                                # Store client-specific variables in session state for MLR model
+                                                if model_name == "MLR":
+                                                    st.session_state[f"client_specific_vars_{model_name}"] = client_specific_vars
+                                                    st.session_state[f"other_feature_vars_{model_name}"] = other_feature_vars
+                                                
+                                                # Get client-specific variables from session state for MLR
+                                                client_specific_vars = None
+                                                other_feature_vars = None
+                                                if model_name == "MLR":
+                                                    client_specific_vars = st.session_state.get(f"client_specific_vars_{model_name}", [])
+                                                    other_feature_vars = st.session_state.get(f"other_feature_vars_{model_name}", [])
+                                                
+                                                train_model_safely(
+                                                    model_name, 
+                                                    df_for_training, 
+                                                    range_col, 
+                                                    target_var, 
+                                                    feature_vars, 
+                                                    prediction_length, 
+                                                    test_percentage, 
+                                                    client_specific_vars, 
+                                                    other_feature_vars,
+                                                    use_decomposition,
+                                                    decomposition_method,
+                                                    decomposition_period
+                                                )
                                         else:
                                             st.warning("Need at least 5 observations for training after data processing.")
                                     else:
@@ -1214,6 +1320,84 @@ def main():
     # Handle combine reports tab
     with tabs[-1]:
         create_combine_reports_tab()
+
+def create_data_file_selector():
+    """Create a dropdown to select from available data files."""
+    st.subheader("📁 Data File Selection")
+    
+    # Get list of available data files
+    import glob
+    import os
+    
+    data_files = []
+    for pattern in ["*.xlsx", "*.xls", "*.csv"]:
+        data_files.extend(glob.glob(pattern))
+    
+    # Filter out system files and temporary files
+    data_files = [f for f in data_files if not f.startswith('.') and not f.startswith('~')]
+    
+    if not data_files:
+        st.warning("No data files found in the current directory.")
+        st.info("Please upload files using the file uploader above.")
+        return None
+    
+    # Create a mapping of display names to file paths
+    file_options = {}
+    for file_path in data_files:
+        # Create a user-friendly display name
+        file_size = os.path.getsize(file_path) / (1024 * 1024)  # Size in MB
+        display_name = f"{file_path} ({file_size:.1f} MB)"
+        file_options[display_name] = file_path
+    
+    # Add option for file upload
+    file_options["📤 Upload new file..."] = "upload"
+    
+    selected_display = st.selectbox(
+        "Choose a data file:",
+        options=list(file_options.keys()),
+        help="Select a data file to use for analysis. Files with time series data work best for seasonal decomposition."
+    )
+    
+    selected_file = file_options[selected_display]
+    
+    if selected_file == "upload":
+        st.info("Please use the file uploader at the top of the page.")
+        return None
+    
+    # Load and display file info
+    try:
+        if selected_file.endswith('.csv'):
+            df = pd.read_csv(selected_file)
+        else:
+            df = pd.read_excel(selected_file)
+        
+        st.success(f"✅ Loaded {selected_file}")
+        st.info(f"Data shape: {df.shape[0]} rows × {df.shape[1]} columns")
+        
+        # Show sample data
+        with st.expander("📊 Sample Data"):
+            st.dataframe(df.head())
+        
+        # Show column information
+        with st.expander("📋 Column Information"):
+            col_info = []
+            for col in df.columns:
+                dtype = str(df[col].dtype)
+                null_count = df[col].isnull().sum()
+                unique_count = df[col].nunique()
+                col_info.append({
+                    "Column": col,
+                    "Type": dtype,
+                    "Null Values": null_count,
+                    "Unique Values": unique_count
+                })
+            st.dataframe(pd.DataFrame(col_info))
+        
+        return df
+        
+    except Exception as e:
+        st.error(f"Error loading {selected_file}: {str(e)}")
+        return None
 
 
 if __name__ == "__main__":

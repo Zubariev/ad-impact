@@ -17,7 +17,7 @@ MODEL_TABLE = [
     {
         "name": "MLR",
         "chart": "Stacked Area Chart",
-        "variables_allowed": (1, 50),
+        "variables_allowed": (1, 200),
     },
     {
         "name": "Distributed Lag",

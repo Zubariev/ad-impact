@@ -510,6 +510,107 @@ def validate_data_for_training(df: pd.DataFrame, target: str, features: List[str
     return True
 
 
+def convert_year_week_to_datetime(series: pd.Series) -> pd.Series:
+    """
+    Convert year-week format (e.g., "2023_0") to datetime.
+    
+    Args:
+        series: Series containing year-week strings
+        
+    Returns:
+        Series with datetime values
+    """
+    def year_week_to_date(year_week_str):
+        try:
+            year, week = year_week_str.split('_')
+            # Convert to datetime using ISO week format
+            return pd.to_datetime(f"{year}-W{week.zfill(2)}-1", format='%Y-W%W-%w')
+        except:
+            return pd.NaT
+    
+    return series.apply(year_week_to_date)
+
+def create_time_period_indicator(df: pd.DataFrame, date_col: str, campaign_start_date: str = None) -> pd.DataFrame:
+    """
+    Create a binary time period indicator (pre_campaign/post_campaign) based on campaign start date.
+    
+    Args:
+        df: Input DataFrame
+        date_col: Date column name
+        campaign_start_date: Campaign start date (if None, uses 75th percentile date for more meaningful split)
+        
+    Returns:
+        DataFrame with added 'time_period' column (0 for pre-campaign, 1 for post-campaign)
+    """
+    df = df.copy()
+    
+    # Handle year-week format (e.g., "2023_51")
+    if df[date_col].dtype == 'object' and df[date_col].str.contains('_').any():
+        df[date_col] = convert_year_week_to_datetime(df[date_col])
+        logger.info(f"Converted year-week format to datetime for column: {date_col}")
+    
+    # Convert date column to datetime if not already
+    if not pd.api.types.is_datetime64_any_dtype(df[date_col]):
+        df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+    
+    # Remove rows with invalid dates
+    invalid_dates = df[date_col].isna().sum()
+    if invalid_dates > 0:
+        logger.warning(f"Removing {invalid_dates} rows with invalid dates")
+        df = df.dropna(subset=[date_col])
+    
+    # Determine campaign start date
+    if campaign_start_date is None:
+        # Use 75th percentile date as default campaign start for more meaningful split
+        # This ensures more pre-campaign data for better baseline estimation
+        campaign_start_date = df[date_col].quantile(0.75)
+    else:
+        campaign_start_date = pd.to_datetime(campaign_start_date)
+    
+    # Create time period indicator
+    df['time_period'] = (df[date_col] >= campaign_start_date).astype(int)
+    
+    # Log the split for debugging
+    pre_count = (df['time_period'] == 0).sum()
+    post_count = df['time_period'].sum()
+    logger.info(f"Time period split: {pre_count} pre-campaign, {post_count} post-campaign observations")
+    
+    return df
+
+
+def create_client_interaction_terms(df: pd.DataFrame, client_specific_vars: List[str], time_period_col: str = 'time_period') -> pd.DataFrame:
+    """
+    Create interaction terms for client-specific variables with time period indicator.
+    
+    Args:
+        df: Input DataFrame
+        client_specific_vars: List of client-specific variable names
+        time_period_col: Name of time period indicator column
+        
+    Returns:
+        DataFrame with interaction terms added
+    """
+    df = df.copy()
+    
+    # Create interaction terms for each client-specific variable
+    for var in client_specific_vars:
+        if var in df.columns and time_period_col in df.columns:
+            interaction_name = f"{var}_x_time_period"
+            
+            # Center the variable to reduce multicollinearity
+            var_mean = df[var].mean()
+            df[f"{var}_centered"] = df[var] - var_mean
+            
+            # Create interaction term with centered variable
+            df[interaction_name] = df[f"{var}_centered"] * df[time_period_col]
+            
+            # Log interaction term statistics for debugging
+            interaction_stats = df[interaction_name].describe()
+            logger.info(f"Interaction term {interaction_name}: mean={interaction_stats['mean']:.4f}, std={interaction_stats['std']:.4f}")
+    
+    return df
+
+
 def get_data_summary_stats(df: pd.DataFrame, target: str, features: List[str]) -> dict:
     """
     Generate summary statistics for the dataset.

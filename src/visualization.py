@@ -499,120 +499,287 @@ def create_kpi_dashboard(
         st.warning(f"Could not create KPI dashboard: {str(kpi_error)}")
 
 
-def display_mlr_metrics(df: pd.DataFrame, target: str, features: List[str]) -> None:
+def display_mlr_metrics(df: pd.DataFrame, target: str, features: List[str], model: Any = None, client_specific_vars: List[str] = None, predictions: pd.DataFrame = None) -> None:
     """
-    Display MLR model diagnostics and metrics.
+    Display MLR model diagnostics and metrics with client-specific effect analysis.
     
     Args:
         df: Input DataFrame
         target: Target variable name
         features: Feature variable names
+        model: Trained model object (for client-specific analysis)
+        client_specific_vars: List of client-specific variables
     """
     try:
-        X = sm.add_constant(df[features])
-        y = df[target]
-        model = sm.OLS(y, X).fit()
-
-        st.subheader("Model Diagnostics (MLR)")
-        st.markdown(
-            f"**R² / Adj R²:** {model.rsquared:.3f} / {model.rsquared_adj:.3f}\n\n"
-            f"**F-statistic (p):** {model.fvalue:.2f} ({model.f_pvalue:.3g})"
-        )
-
-        # Coefficient table with significance indicators
-        coef_tbl = model.summary2().tables[1].rename(columns={"Coef.": "Coef"})
-        coef_tbl["Signif"] = coef_tbl["P>|t|"].apply(
-            lambda p: "***" if p < 0.001 else "**" if p < 0.01 else "*" if p < 0.05 else "ns"
-        )
-        styled = coef_tbl.style.applymap(
-            lambda p: "color:green;" if p < SIGNIFICANCE_LEVEL else "color:red;", 
-            subset=["P>|t|"]
-        )
-        st.dataframe(styled, height=min(400, 25 * len(coef_tbl)))
-
-        # VIF table
-        vif_df = create_vif_table(df, features)
-        st.markdown("**Variance Inflation Factor (VIF):**")
-        # Check if VIF column is numeric before formatting
-        if "VIF" in vif_df.columns and pd.api.types.is_numeric_dtype(vif_df["VIF"]):
-            # Replace infinite values with a large number for display
-            vif_df_display = vif_df.copy()
-            vif_df_display["VIF"] = vif_df_display["VIF"].replace([np.inf, -np.inf], 999.0)
-            st.dataframe(vif_df_display.style.format({"VIF": "{:.2f}"}))
-        else:
-            st.dataframe(vif_df)
-
-        # Residual plot
-        resid = model.resid
-        fig_resid = px.scatter(
-            x=model.fittedvalues, 
-            y=resid, 
-            labels={"x": "Fitted", "y": "Residuals"}, 
-            title="Residual Diagnostic"
-        )
-        fig_resid.add_hline(y=0, line_dash="dash")
-        st.plotly_chart(fig_resid, use_container_width=True)
-        
-        # Create KPI Dashboard for MLR
-        model_metrics = {
-            'r_squared': model.rsquared,
-            'adj_r_squared': model.rsquared_adj,
-            'f_statistic': model.fvalue
-        }
-        create_kpi_dashboard(df, target, features, model.fittedvalues, model_metrics)
-        
-        # Create predictions for MLR model and show actual vs predicted chart
-        try:
-            predictions_data = pd.DataFrame({
-                'prediction': model.fittedvalues
-            })
+        # Check if this is a client-specific analysis
+        if model and hasattr(model, 'summary') and client_specific_vars:
+            # Client-specific analysis
+            st.subheader(" Client-Specific Advertising Effects Analysis")
             
-            # Try to find a date column, with fallbacks
-            date_cols = [col for col in df.columns if pd.api.types.is_datetime64_any_dtype(df[col])]
-            if not date_cols:
-                date_cols = [col for col in df.columns if 'date' in col.lower()]
+            # Display model summary
+            st.markdown("**Model Summary:**")
+            st.text(str(model.summary()))
             
-            # Use the first available column or create row index
-            if date_cols:
-                date_col = date_cols[0]
-                st.markdown("**Actual vs Predicted Comparison:**")
-                logger.info(f"Creating actual vs predicted chart with date column: {date_col}")
+            # Client-specific effects section
+            st.subheader("Client-Specific Channel Effects")
+            
+            from data_analysis import analyze_client_specific_effects
+            client_analysis = analyze_client_specific_effects(model, df, target, client_specific_vars)
+            
+            if "client_specific_effects" in client_analysis:
+                # Display client-specific effects
+                effects_data = []
+                for term, effect in client_analysis["client_specific_effects"].items():
+                    # Handle None values safely
+                    coef = effect.get('coefficient', None)
+                    p_val = effect.get('p_value', None)
+                    ci_lower = effect.get('confidence_interval_lower', None)
+                    ci_upper = effect.get('confidence_interval_upper', None)
+                    
+                    effects_data.append({
+                        "Channel": effect.get("original_variable", term),
+                        "Coefficient": f"{coef:.4f}" if coef is not None else "N/A",
+                        "P-Value": f"{p_val:.4f}" if p_val is not None else "N/A",
+                        "Significance": effect.get("significance", "Unknown"),
+                        "Effect Direction": effect.get("effect_direction", "Unknown"),
+                        "CI Lower": f"{ci_lower:.4f}" if ci_lower is not None else "N/A",
+                        "CI Upper": f"{ci_upper:.4f}" if ci_upper is not None else "N/A"
+                    })
                 
-                fig_comparison = create_actual_vs_predicted_chart(
-                    df, predictions_data, date_col, target, 'prediction'
-                )
-                st.plotly_chart(fig_comparison, use_container_width=True)
-                st.success("Actual vs Predicted chart displayed above")
-                logger.info("Actual vs predicted chart displayed successfully for MLR")
+                effects_df = pd.DataFrame(effects_data)
+                st.dataframe(effects_df, use_container_width=True)
+                
+                # Business insights
+                if "business_insights" in client_analysis:
+                    st.subheader("💼 Business Insights")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        effective_count = len(client_analysis["business_insights"]["effective_channels"])
+                        st.metric("Effective Channels", effective_count)
+                    with col2:
+                        ineffective_count = len(client_analysis["business_insights"]["ineffective_channels"])
+                        st.metric("Ineffective Channels", ineffective_count)
+                    with col3:
+                        uncertain_count = len(client_analysis["business_insights"]["uncertain_channels"])
+                        st.metric("Uncertain Channels", uncertain_count)
+                    
+                    # Recommendations
+                    if client_analysis["business_insights"]["recommendations"]:
+                        st.subheader("📋 Recommendations")
+                        for rec in client_analysis["business_insights"]["recommendations"]:
+                            st.info(rec)
+                
+                # Model performance metrics
+                try:
+                    r_squared = model.rsquared if hasattr(model, 'rsquared') else None
+                    adjusted_r_squared = model.rsquared_adj if hasattr(model, 'rsquared_adj') else None
+                    rmse = np.sqrt(model.mse_resid) if hasattr(model, 'mse_resid') else None
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("R-squared", f"{r_squared:.4f}" if r_squared is not None else "N/A")
+                    with col2:
+                        st.metric("Adjusted R-squared", f"{adjusted_r_squared:.4f}" if adjusted_r_squared is not None else "N/A")
+                    with col3:
+                        st.metric("RMSE", f"{rmse:.4f}" if rmse is not None else "N/A")
+                except Exception as metrics_error:
+                    logger.error(f"Error computing model metrics: {metrics_error}")
+                    st.warning("Could not compute model performance metrics")
+                
+                # Residual plot
+                try:
+                    if hasattr(model, 'resid') and hasattr(model, 'fittedvalues'):
+                        resid = model.resid
+                        fitted = model.fittedvalues
+                        fig_resid = px.scatter(
+                            x=fitted, 
+                            y=resid, 
+                            labels={"x": "Fitted", "y": "Residuals"}, 
+                            title="Residual Diagnostic"
+                        )
+                        fig_resid.add_hline(y=0, line_dash="dash")
+                        st.plotly_chart(fig_resid, use_container_width=True)
+                    else:
+                        st.warning("Could not create residual plot - model missing required attributes")
+                except Exception as plot_error:
+                    logger.error(f"Error creating residual plot: {plot_error}")
+                    st.warning("Could not create residual plot")
+                
+                # Create actual vs predicted chart for client-specific analysis
+                try:
+                    # Use passed predictions if available, otherwise create from model
+                    if predictions is not None and not predictions.empty:
+                        predictions_data = predictions.copy()
+                        if 'prediction' not in predictions_data.columns and len(predictions_data.columns) > 0:
+                            # Use the first column as prediction if no 'prediction' column exists
+                            predictions_data['prediction'] = predictions_data.iloc[:, 0]
+                    else:
+                        predictions_data = pd.DataFrame({
+                            'prediction': model.fittedvalues
+                        })
+                    
+                    # Try to find a date column, with fallbacks
+                    date_cols = [col for col in df.columns if pd.api.types.is_datetime64_any_dtype(df[col])]
+                    if not date_cols:
+                        date_cols = [col for col in df.columns if 'date' in col.lower()]
+                    
+                    # Use the first available column or create row index
+                    if date_cols:
+                        date_col = date_cols[0]
+                        st.markdown("**Actual vs Predicted Comparison:**")
+                        logger.info(f"Creating actual vs predicted chart with date column: {date_col}")
+                        
+                        fig_comparison = create_actual_vs_predicted_chart(
+                            df, predictions_data, date_col, target, 'prediction'
+                        )
+                        st.plotly_chart(fig_comparison, use_container_width=True)
+                        st.success("Actual vs Predicted chart displayed above")
+                        logger.info("Actual vs predicted chart displayed successfully for MLR client-specific analysis")
+                    else:
+                        # Fallback: use the first column (likely the range column user selected) or row index
+                        fallback_col = df.columns[0] if len(df.columns) > 0 else 'index'
+                        st.markdown("**Actual vs Predicted Comparison:**")
+                        st.info(f"No date column found. Using '{fallback_col}' for x-axis.")
+                        logger.info(f"Creating actual vs predicted chart with fallback column: {fallback_col}")
+                        
+                        # Create a temporary dataframe with row indices if needed
+                        if fallback_col == 'index':
+                            temp_df = df.copy()
+                            temp_df['index'] = range(len(temp_df))
+                            fig_comparison = create_actual_vs_predicted_chart(
+                                temp_df, predictions_data, 'index', target, 'prediction'
+                            )
+                        else:
+                            fig_comparison = create_actual_vs_predicted_chart(
+                                df, predictions_data, fallback_col, target, 'prediction'
+                            )
+                        
+                        st.plotly_chart(fig_comparison, use_container_width=True)
+                        st.success("Actual vs Predicted chart displayed above")
+                        logger.info("Actual vs predicted chart displayed successfully for MLR client-specific analysis with fallback")
+                
+                except Exception as chart_error:
+                    logger.error(f"Error creating actual vs predicted chart for MLR client-specific analysis: {str(chart_error)}")
+                    st.warning(f"Could not create actual vs predicted chart: {str(chart_error)}")
+                    st.info("This may be due to date column detection issues or data format problems.")
+                
             else:
-                # Fallback: use the first column (likely the range column user selected) or row index
-                fallback_col = df.columns[0] if len(df.columns) > 0 else 'index'
-                st.markdown("**Actual vs Predicted Comparison:**")
-                st.info(f"No date column found. Using '{fallback_col}' for x-axis.")
-                logger.info(f"Creating actual vs predicted chart with fallback column: {fallback_col}")
-                
-                # Create a temporary dataframe with row indices if needed
-                if fallback_col == 'index':
-                    temp_df = df.copy()
-                    temp_df['index'] = range(len(temp_df))
-                    fig_comparison = create_actual_vs_predicted_chart(
-                        temp_df, predictions_data, 'index', target, 'prediction'
-                    )
+                st.warning("No client-specific effects found in the model.")
+        
+        else:
+            # Standard MLR analysis
+            X = sm.add_constant(df[features])
+            y = df[target]
+            model = sm.OLS(y, X).fit()
+
+            st.subheader("Standard MLR Model Diagnostics")
+            st.markdown(
+                f"**R² / Adj R²:** {model.rsquared:.3f} / {model.rsquared_adj:.3f}\n\n"
+                f"**F-statistic (p):** {model.fvalue:.2f} ({model.f_pvalue:.3g})"
+            )
+
+            # Coefficient table with significance indicators
+            coef_tbl = model.summary2().tables[1].rename(columns={"Coef.": "Coef"})
+            coef_tbl["Signif"] = coef_tbl["P>|t|"].apply(
+                lambda p: "***" if p < 0.001 else "**" if p < 0.01 else "*" if p < 0.05 else "ns"
+            )
+            styled = coef_tbl.style.applymap(
+                lambda p: "color:green;" if p < SIGNIFICANCE_LEVEL else "color:red;", 
+                subset=["P>|t|"]
+            )
+            st.dataframe(styled, height=min(400, 25 * len(coef_tbl)))
+
+            # VIF table
+            vif_df = create_vif_table(df, features)
+            st.markdown("**Variance Inflation Factor (VIF):**")
+            # Check if VIF column is numeric before formatting
+            if "VIF" in vif_df.columns and pd.api.types.is_numeric_dtype(vif_df["VIF"]):
+                # Replace infinite values with a large number for display
+                vif_df_display = vif_df.copy()
+                vif_df_display["VIF"] = vif_df_display["VIF"].replace([np.inf, -np.inf], 999.0)
+                st.dataframe(vif_df_display.style.format({"VIF": "{:.2f}"}))
+            else:
+                st.dataframe(vif_df)
+
+            # Residual plot
+            resid = model.resid
+            fig_resid = px.scatter(
+                x=model.fittedvalues, 
+                y=resid, 
+                labels={"x": "Fitted", "y": "Residuals"}, 
+                title="Residual Diagnostic"
+            )
+            fig_resid.add_hline(y=0, line_dash="dash")
+            st.plotly_chart(fig_resid, use_container_width=True)
+            
+            # Create KPI Dashboard for MLR
+            model_metrics = {
+                'r_squared': model.rsquared,
+                'adj_r_squared': model.rsquared_adj,
+                'f_statistic': model.fvalue
+            }
+            create_kpi_dashboard(df, target, features, model.fittedvalues, model_metrics)
+            
+            # Create predictions for MLR model and show actual vs predicted chart
+            try:
+                # Use passed predictions if available, otherwise create from model
+                if predictions is not None and not predictions.empty:
+                    predictions_data = predictions.copy()
+                    if 'prediction' not in predictions_data.columns and len(predictions_data.columns) > 0:
+                        # Use the first column as prediction if no 'prediction' column exists
+                        predictions_data['prediction'] = predictions_data.iloc[:, 0]
                 else:
+                    predictions_data = pd.DataFrame({
+                        'prediction': model.fittedvalues
+                    })
+                
+                # Try to find a date column, with fallbacks
+                date_cols = [col for col in df.columns if pd.api.types.is_datetime64_any_dtype(df[col])]
+                if not date_cols:
+                    date_cols = [col for col in df.columns if 'date' in col.lower()]
+                
+                # Use the first available column or create row index
+                if date_cols:
+                    date_col = date_cols[0]
+                    st.markdown("**Actual vs Predicted Comparison:**")
+                    logger.info(f"Creating actual vs predicted chart with date column: {date_col}")
+                    
                     fig_comparison = create_actual_vs_predicted_chart(
-                        df, predictions_data, fallback_col, target, 'prediction'
+                        df, predictions_data, date_col, target, 'prediction'
                     )
+                    st.plotly_chart(fig_comparison, use_container_width=True)
+                    st.success("Actual vs Predicted chart displayed above")
+                    logger.info("Actual vs predicted chart displayed successfully for MLR")
+                else:
+                    # Fallback: use the first column (likely the range column user selected) or row index
+                    fallback_col = df.columns[0] if len(df.columns) > 0 else 'index'
+                    st.markdown("**Actual vs Predicted Comparison:**")
+                    st.info(f"No date column found. Using '{fallback_col}' for x-axis.")
+                    logger.info(f"Creating actual vs predicted chart with fallback column: {fallback_col}")
+                    
+                    # Create a temporary dataframe with row indices if needed
+                    if fallback_col == 'index':
+                        temp_df = df.copy()
+                        temp_df['index'] = range(len(temp_df))
+                        fig_comparison = create_actual_vs_predicted_chart(
+                            temp_df, predictions_data, 'index', target, 'prediction'
+                        )
+                    else:
+                        fig_comparison = create_actual_vs_predicted_chart(
+                            df, predictions_data, fallback_col, target, 'prediction'
+                        )
                 
                 st.plotly_chart(fig_comparison, use_container_width=True)
                 st.success("Actual vs Predicted chart displayed above")
                 logger.info("Actual vs predicted chart displayed successfully for MLR with fallback")
-        
-        except Exception as chart_error:
-            logger.error(f"Error creating actual vs predicted chart for MLR: {str(chart_error)}")
-            st.warning(f"Could not create actual vs predicted chart: {str(chart_error)}")
-            st.info("This may be due to date column detection issues or data format problems.")
-        
-        logger.info("MLR metrics displayed successfully")
+            
+            except Exception as chart_error:
+                logger.error(f"Error creating actual vs predicted chart for MLR: {str(chart_error)}")
+                st.warning(f"Could not create actual vs predicted chart: {str(chart_error)}")
+                st.info("This may be due to date column detection issues or data format problems.")
+            
+            logger.info("MLR metrics displayed successfully")
         
     except Exception as e:
         logger.error(f"Error displaying MLR metrics: {str(e)}")
@@ -805,7 +972,7 @@ def display_ml_shap_metrics(model: Any, df: pd.DataFrame, target: str) -> None:
             st.plotly_chart(fig_waterfall, use_container_width=True)
             
             # Additional Feature Impact Analysis
-            st.markdown("**📊 Feature Impact Distribution:**")
+            st.markdown("**Feature Impact Distribution:**")
             
             # Create box plot showing SHAP value distributions
             shap_df_long = pd.DataFrame(shap_values.values, columns=feature_cols)
@@ -1078,7 +1245,14 @@ def display_psm_metrics(predictions: pd.DataFrame) -> None:
 
 # Model metric display dispatcher
 MODEL_METRIC_DISPATCH = {
-    "MLR": lambda **kwargs: display_mlr_metrics(kwargs["df"], kwargs["target"], kwargs["features"]),
+    "MLR": lambda **kwargs: display_mlr_metrics(
+        kwargs["df"], 
+        kwargs["target"], 
+        kwargs["features"], 
+        kwargs.get("model"), 
+        kwargs.get("model").client_specific_vars if kwargs.get("model") and hasattr(kwargs.get("model"), "client_specific_vars") else None,
+        kwargs.get("predictions")
+    ),
     "Distributed Lag": lambda **kwargs: display_distributed_lag_metrics(kwargs["df"], kwargs["target"], kwargs["features"]),
     "ML + SHAP": lambda **kwargs: display_ml_shap_metrics(kwargs["model"], kwargs["df"], kwargs["target"]),
     "DiD": lambda **kwargs: display_did_metrics(kwargs["model"]),
@@ -1189,6 +1363,7 @@ def collect_model_report_data(
             "variance_inflation_factor": {},
             "residual_diagnostics": {},
             "overfitting_analysis": {},
+            "client_specific_analysis": {},
             "model_predictions": {},
             "channel_contributions": {},
             "multicollinearity_integration": {},
@@ -1433,6 +1608,16 @@ def collect_model_report_data(
                                 "recommendation": "remove_immediately"
                             }
                     report["variance_inflation_factor"] = vif_data
+                
+                # Client-specific analysis (if available)
+                if hasattr(model, 'client_specific_vars') and model.client_specific_vars:
+                    from data_analysis import analyze_client_specific_effects
+                    client_analysis = analyze_client_specific_effects(model, df, target, model.client_specific_vars)
+                    report["client_specific_analysis"] = client_analysis
+                else:
+                    report["client_specific_analysis"] = {
+                        "note": "No client-specific variables identified for analysis"
+                    }
                 
                 # Enhanced residual diagnostics
                 residuals = ols_model.resid
@@ -2502,13 +2687,13 @@ def display_interpretation_hints(model_name: str) -> None:
     hints = create_interpretation_hints(model_name)
     
     with st.expander("💡 Enhanced Model Interpretation Guide", expanded=False):
-        st.markdown(f"### 🎯 **{model_name} Model Interpretation**")
+        st.markdown(f"{model_name} Model Interpretation")
         
         for i, hint in enumerate(hints, 1):
             st.markdown(f"{i}. {hint}")
         
         st.markdown("---")
-        st.markdown("### 📊 **General Guidelines**")
+        st.markdown("### **General Guidelines**")
         st.markdown("""
         - **Statistical Significance**: Look for p-values < 0.05 for reliable effects
         - **Effect Size**: Consider practical significance alongside statistical significance  
@@ -2536,7 +2721,7 @@ def display_interpretation_hints(model_name: str) -> None:
             """)
         
         elif model_name in ["DiD", "Synthetic Control", "CausalImpact", "PSM"]:
-            st.markdown("### 🎯 **Causal Inference Specifics**")
+            st.markdown("Causal Inference Specifics")
             st.markdown("""
             - **Causal Assumptions**: Carefully validate identifying assumptions
             - **Treatment Effect**: Consider both statistical and economic significance
