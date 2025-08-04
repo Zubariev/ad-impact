@@ -511,20 +511,24 @@ def apply_seasonal_decomposition(
         return df, None, None
 
 
-def create_decomposition_ui() -> Tuple[str, Optional[int]]:
+def create_decomposition_ui(model_name: str = "default") -> Tuple[str, Optional[int]]:
     """
     Create UI for seasonal decomposition settings.
     
+    Args:
+        model_name: Model name for unique key generation
+        
     Returns:
         Tuple of (decomposition method, seasonal period)
     """
-    st.subheader("🔍 Seasonal Decomposition Settings")
+    st.subheader("Seasonal Decomposition Settings")
     
     # Decomposition method selection
     method = st.selectbox(
         "Decomposition Method",
         options=['STL', 'seasonal_decompose', 'x13'],
         index=0,
+        key=f"decomposition_method_{model_name}",
         help="STL: Robust decomposition, seasonal_decompose: Classical decomposition, x13: X-13ARIMA-SEATS"
     )
     
@@ -534,6 +538,7 @@ def create_decomposition_ui() -> Tuple[str, Optional[int]]:
         min_value=2,
         max_value=365,
         value=None,
+        key=f"decomposition_period_{model_name}",
         help="Common values: 7 (weekly), 12 (monthly), 52 (yearly), 4 (quarterly)"
     )
     
@@ -553,7 +558,7 @@ def display_decomposition_info(decomposer: SeasonalDecomposer) -> None:
     if decomposer is None or decomposer.decomposition_result is None:
         return
         
-    st.subheader("📊 Decomposition Information")
+    st.subheader("Decomposition Information")
     
     # Calculate decomposition statistics
     original = decomposer.decomposition_result['original']

@@ -499,12 +499,12 @@ def validate_data_for_training(df: pd.DataFrame, target: str, features: List[str
     if model_name in ["DiD"]:
         if "treated" not in df.columns or "post" not in df.columns:
             st.error("DiD model requires 'treated' and 'post' columns. Use data preparation utilities to create them.")
-            st.info("💡 Go to 'Data Preparation for Advanced Models' section above to create these columns.")
+            st.info("Go to 'Data Preparation for Advanced Models' section above to create these columns.")
             return False
     elif model_name in ["Synthetic Control", "PSM"]:
         if "treated" not in df.columns:
             st.error(f" {model_name} model requires 'treated' column. Use data preparation utilities to create it.")
-            st.info("💡 Go to 'Data Preparation for Advanced Models' section above to create this column.")
+            st.info("Go to 'Data Preparation for Advanced Models' section above to create this column.")
             return False
     
     return True

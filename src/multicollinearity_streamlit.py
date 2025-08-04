@@ -43,7 +43,7 @@ def add_multicollinearity_analysis(
     """
     
     # Debug information
-    st.write("🔍 **Multicollinearity Analysis Debug Info:**")
+    st.write("**Multicollinearity Analysis Debug Info:**")
     st.write(f"- Model: {model_name}")
     st.write(f"- Dataset shape: {df.shape}")
     st.write(f"- Target: {target_column}")
@@ -66,7 +66,7 @@ def add_multicollinearity_analysis(
     
     # Create analysis section
     st.markdown("---")
-    st.header("🔍 Multicollinearity Analysis")
+    st.header("Multicollinearity Analysis")
     st.caption(f"Automatic analysis triggered after {model_name} training completion")
     
     # Analysis toggle
@@ -167,7 +167,7 @@ def _display_analysis_results(dashboard_data: Dict, integrator: DashboardAnalysi
         )
     
     # Create analysis tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["⚠️ Alerts", "🔗 Correlations", "💡 Suggestions", "📁 Downloads"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Alerts", "Correlations", "Suggestions", "Downloads"])
     
     with tab1:
         _display_alerts_tab(dashboard_data)
@@ -191,10 +191,10 @@ def _display_alerts_tab(dashboard_data: Dict) -> None:
         st.success(" No critical multicollinearity issues detected!")
         return
     
-    st.markdown("### ⚠️ Critical Issues Detected")
+    st.markdown("### Critical Issues Detected")
     
     for i, alert in enumerate(alerts):
-        severity_emoji = "🔴" if alert.get('severity') == 'critical' else "🟠"
+        severity_emoji = "Critical" if alert.get('severity') == 'critical' else "Warning"
         
         with st.expander(f"{severity_emoji} {alert.get('title')}", expanded=i == 0):
             st.write(f"**Message:** {alert.get('message')}")
@@ -219,7 +219,7 @@ def _display_correlations_tab(dashboard_data: Dict, integrator: DashboardAnalysi
     # Show correlation summary
     summary = correlation_data.get('summary', {})
     
-    st.markdown("### 🔗 Correlation Summary")
+    st.markdown("### Correlation Summary")
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -245,7 +245,7 @@ def _display_correlations_tab(dashboard_data: Dict, integrator: DashboardAnalysi
     
     # Show top correlations table
     if correlation_data.get('top_correlations'):
-        st.markdown("### 🔍 Top Problematic Correlations")
+        st.markdown("### Top Problematic Correlations")
         
         top_corr_data = []
         for pair in correlation_data['top_correlations'][:15]:
@@ -339,7 +339,7 @@ model.fit(X, y)
 def _display_downloads_tab(integrator: DashboardAnalysisIntegrator, report_path: str, model_name: str) -> None:
     """Display download section."""
     
-    st.markdown("### 📁 Download Analysis Results")
+    st.markdown("### Download Analysis Results")
     
     col1, col2 = st.columns(2)
     
@@ -352,7 +352,7 @@ def _display_downloads_tab(integrator: DashboardAnalysisIntegrator, report_path:
                 json_data = f.read()
             
             st.download_button(
-                label="📋 Download Complete Analysis (JSON)",
+                label="Download Complete Analysis (JSON)",
                 data=json_data,
                 file_name=f"{model_name}_multicollinearity_analysis.json",
                 mime="application/json",
@@ -372,7 +372,7 @@ def _display_downloads_tab(integrator: DashboardAnalysisIntegrator, report_path:
                     csv_data = reduced_data.to_csv(index=False)
                     
                     st.download_button(
-                        label="📁 Download Optimized Dataset (CSV)",
+                        label="Download Optimized Dataset (CSV)",
                         data=csv_data,
                         file_name=f"{model_name}_optimized_dataset.csv",
                         mime="text/csv",
@@ -394,7 +394,7 @@ def _display_downloads_tab(integrator: DashboardAnalysisIntegrator, report_path:
                 removals_text = "\n".join(integrator.analyzer.suggested_removals)
                 
                 st.download_button(
-                    label="🗑️ Variables to Remove (TXT)",
+                    label="Variables to Remove (TXT)",
                     data=removals_text,
                     file_name=f"{model_name}_variables_to_remove.txt",
                     mime="text/plain",

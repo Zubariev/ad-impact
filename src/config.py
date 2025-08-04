@@ -22,7 +22,7 @@ MODEL_TABLE = [
     {
         "name": "Distributed Lag",
         "chart": "Stacked Area Chart (with lags)",
-        "variables_allowed": (1, 20),
+        "variables_allowed": (1, 200),
     },
     {
         "name": "ML + SHAP",
@@ -32,32 +32,32 @@ MODEL_TABLE = [
     {
         "name": "DiD",
         "chart": "Slope Graph / Bar Chart with Error Bars",
-        "variables_allowed": (1, 10),
+        "variables_allowed": (1, 200),
     },
     {
         "name": "VAR",
         "chart": "IRF Line Plot / Cumulative Bar Chart",
-        "variables_allowed": (1, 6),
+        "variables_allowed": (1, 200),
     },
     {
         "name": "Synthetic Control",
         "chart": "Line Chart (Actual vs Synthetic)",
-        "variables_allowed": (1, 10),
+        "variables_allowed": (1, 200),
     },
     {
         "name": "CausalImpact",
         "chart": "Line Chart with CI / Cumulative Bar Chart",
-        "variables_allowed": (1, 20),
+        "variables_allowed": (1, 200),
     },
     {
         "name": "PSM",
         "chart": "Bar Chart (Matched Groups) / Density Plot",
-        "variables_allowed": (1, 20),
+        "variables_allowed": (1, 200),
     },
     {
         "name": "Chronos T5 Large",
         "chart": "Time Series Forecast Line Chart",
-        "variables_allowed": (1, 10),
+        "variables_allowed": (1, 200),
     },
 ]
 

@@ -274,6 +274,8 @@ def train_distributed_lag(
         if max_lag is None:
             max_lag = MODEL_HYPERPARAMS["Distributed Lag"]["max_lag"]
         
+        logger.info(f"Training Distributed Lag model with max_lag={max_lag}, {len(features)} features, {len(df)} observations")
+        
         # Create lagged features
         lagged_cols = []
         for lag in range(1, max_lag + 1):
@@ -282,9 +284,27 @@ def train_distributed_lag(
                 df[col] = df[feat].shift(lag)
                 lagged_cols.append(col)
         
-        df = df.dropna()
+        # Handle NaN values more gracefully
+        # Fill NaN values in lagged features with 0 (no lag effect)
+        for col in lagged_cols:
+            df[col] = df[col].fillna(0)
+        
+        # Check for NaN values in target variable
+        target_nan_count = df[target].isnull().sum()
+        if target_nan_count > 0:
+            logger.warning(f"Found {target_nan_count} NaN values in target variable. These will be removed.")
+            df = df.dropna(subset=[target])
+        
+        # Ensure we have enough data after processing
+        if len(df) < max_lag + 1:
+            raise ValueError(f"Insufficient data for Distributed Lag model. Need at least {max_lag + 1} observations after lag creation, but only have {len(df)}.")
+        
         X = df[lagged_cols]
         y = df[target]
+        
+        logger.info(f"Distributed Lag model: {len(df)} observations, {len(lagged_cols)} lagged features")
+        logger.info(f"Target variable range: {y.min():.2f} to {y.max():.2f}")
+        logger.info(f"Feature variables range: {X.min().min():.2f} to {X.max().max():.2f}")
         
         reg = LinearRegression()
         reg.fit(X, y)
@@ -1473,7 +1493,7 @@ def train_chronos(
                         # Fallback to daily frequency
                         future_dates = pd.date_range(start=last_value, periods=prediction_length + 1, freq='D')[1:]
             except Exception as e:
-                st.warning(f"⚠️ Could not generate future dates: {e}. Using sequential indices.")
+                st.warning(f"Could not generate future dates: {e}. Using sequential indices.")
                 future_dates = [f"forecast_{i+1}" for i in range(prediction_length)]
         else:
             # Handle numeric/ID columns or other types
@@ -1522,7 +1542,7 @@ def train_chronos(
             }
             
             logger.info(f"Chronos forecast metrics - MAE: {mae:.4f}, RMSE: {rmse:.4f}, MAPE: {mape:.2f}%")
-            st.success(f"📈 Forecast validation - MAPE: {mape:.2f}%, RMSE: {rmse:.4f}")
+            st.success(f"Forecast validation - MAPE: {mape:.2f}%, RMSE: {rmse:.4f}")
         
         # Create visualization
         fig = go.Figure()

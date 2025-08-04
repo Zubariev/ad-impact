@@ -95,7 +95,7 @@ def test_seasonal_decomposer():
     non_seasonal = decomposer.get_non_seasonal_component()
     print(f"Non-seasonal component shape: {len(non_seasonal)}")
     
-    print("✅ SeasonalDecomposer test passed!")
+    print("SeasonalDecomposer test passed!")
 
 def test_apply_seasonal_decomposition():
     """Test the apply_seasonal_decomposition function."""
@@ -121,11 +121,11 @@ def test_apply_seasonal_decomposition():
     expected_columns = ['sales_original', 'sales_trend', 'sales_seasonal', 'sales_residual']
     for col in expected_columns:
         if col in df_modified.columns:
-            print(f"✅ {col} column found")
+            print(f"{col} column found")
         else:
-            print(f"❌ {col} column missing")
+            print(f"{col} column missing")
     
-    print("✅ apply_seasonal_decomposition test passed!")
+    print("apply_seasonal_decomposition test passed!")
 
 def test_error_handling():
     """Test error handling for problematic data."""
@@ -140,11 +140,11 @@ def test_error_handling():
             df_small, 'sales', 'date', method='STL', period=4
         )
         if decomposer is None:
-            print("✅ Small dataset handled correctly - decomposition failed gracefully")
+            print("Small dataset handled correctly - decomposition failed gracefully")
         else:
-            print("⚠️ Small dataset unexpectedly succeeded")
+            print("Small dataset unexpectedly succeeded")
     except Exception as e:
-        print(f"✅ Small dataset error handled: {e}")
+        print(f"Small dataset error handled: {e}")
     
     # Test dataset with missing values
     print("Testing dataset with missing values...")
@@ -153,11 +153,11 @@ def test_error_handling():
             df_missing, 'sales', 'date', method='STL', period=4
         )
         if decomposer is not None:
-            print("✅ Missing values handled correctly")
+            print("Missing values handled correctly")
         else:
-            print("⚠️ Missing values caused decomposition to fail")
+            print("Missing values caused decomposition to fail")
     except Exception as e:
-        print(f"✅ Missing values error handled: {e}")
+        print(f"Missing values error handled: {e}")
     
     # Test constant dataset
     print("Testing constant dataset...")
@@ -166,13 +166,13 @@ def test_error_handling():
             df_constant, 'sales', 'date', method='STL', period=4
         )
         if decomposer is None:
-            print("✅ Constant dataset handled correctly - decomposition failed gracefully")
+            print("Constant dataset handled correctly - decomposition failed gracefully")
         else:
-            print("⚠️ Constant dataset unexpectedly succeeded")
+            print("Constant dataset unexpectedly succeeded")
     except Exception as e:
-        print(f"✅ Constant dataset error handled: {e}")
+        print(f"Constant dataset error handled: {e}")
     
-    print("✅ Error handling tests completed!")
+    print("Error handling tests completed!")
 
 if __name__ == "__main__":
     print("Running seasonal decomposition tests...")
@@ -183,6 +183,6 @@ if __name__ == "__main__":
         test_error_handling()
         print("\n🎉 All tests passed!")
     except Exception as e:
-        print(f"\n❌ Test failed: {e}")
+        print(f"\nTest failed: {e}")
         import traceback
         traceback.print_exc() 

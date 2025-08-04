@@ -192,7 +192,7 @@ def handle_missing_data_ui(df: pd.DataFrame, target_var: str, feature_vars: List
         # Final validation
         final_missing = df_processed[required_cols].isnull().sum().sum()
         if final_missing > 0:
-            st.warning(f"⚠️ {final_missing} missing values still remain. These will be removed during training.")
+            st.warning(f"{final_missing} missing values still remain. These will be removed during training.")
         
         st.session_state[f"df_processed_{model_name}"] = df_processed
         st.success(f" Data prepared: {len(df_processed)} observations ready for {model_name} training")
@@ -578,7 +578,7 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
             decomposition_plot = None
             
             if use_decomposition:
-                st.info("🔍 Applying seasonal decomposition to target variable...")
+                st.info("Applying seasonal decomposition to target variable...")
                 df_for_training, decomposer, decomposition_plot = apply_seasonal_decomposition(
                     df_for_training,
                     target,
@@ -588,7 +588,7 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
                 )
                 
                 if decomposer is not None:
-                    st.success("✅ Seasonal decomposition applied successfully!")
+                    st.success("Seasonal decomposition applied successfully!")
                     
                     # Display decomposition information
                     display_decomposition_info(decomposer)
@@ -597,7 +597,7 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
                     if decomposition_plot is not None:
                         st.plotly_chart(decomposition_plot, use_container_width=True)
                 else:
-                    st.warning("⚠️ Seasonal decomposition failed, using original data")
+                    st.warning("Seasonal decomposition failed, using original data")
             
             model_func = TRAIN_FUNCTIONS[model_name]
             
@@ -820,7 +820,7 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
                 predictions=predictions,
             )
             
-            # 🔍 MULTICOLLINEARITY ANALYSIS (now integrated into JSON report above)
+            # MULTICOLLINEARITY ANALYSIS (now integrated into JSON report above)
             # Note: Comprehensive multicollinearity analysis is now integrated directly into the JSON report
             # The analysis includes: correlation analysis, VIF analysis, baseline model comparison, 
             # overfitting detection, variable importance, and actionable recommendations
@@ -855,7 +855,7 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
                 st.info(f"Interactive multicollinearity analysis: {e}")
                 st.info("📋 **Complete multicollinearity analysis has been integrated into your JSON report above.**")
             except Exception as e:
-                st.warning(f"⚠️ Interactive analysis issue: {e}")
+                st.warning(f"Interactive analysis issue: {e}")
                 st.success("📋 **Complete multicollinearity analysis is included in your comprehensive JSON report.**")
             
             display_interpretation_hints(model_name)
@@ -954,12 +954,12 @@ def create_combine_reports_tab():
         )
         
         if json_files:
-            st.success(f"✅ {len(json_files)} JSON files uploaded:")
+            st.success(f"{len(json_files)} JSON files uploaded:")
             for f in json_files:
                 st.write(f"• {f.name}")
     
     with col2:
-        st.subheader("📈 Upload Prediction Files")
+        st.subheader("Upload Prediction Files")
         st.markdown("Upload CSV files containing model predictions:")
         
         prediction_files = st.file_uploader(
@@ -971,7 +971,7 @@ def create_combine_reports_tab():
         )
         
         if prediction_files:
-            st.success(f"✅ {len(prediction_files)} prediction files uploaded:")
+            st.success(f"{len(prediction_files)} prediction files uploaded:")
             for f in prediction_files:
                 st.write(f"• {f.name}")
     
@@ -985,7 +985,7 @@ def create_combine_reports_tab():
                     combined_report = combine_uploaded_files(json_files or [], prediction_files or [])
                     
                     if combined_report:
-                        st.success("✅ Reports combined successfully!")
+                        st.success("Reports combined successfully!")
                         
                         # Display summary
                         st.subheader("Combined Report Summary")
@@ -1010,7 +1010,7 @@ def create_combine_reports_tab():
                                 st.write(f"• {model}")
                         
                         if metadata.get("prediction_files"):
-                            st.write("**📈 Prediction Files Included:**")
+                            st.write("**Prediction Files Included:**")
                             for pred in metadata["prediction_files"]:
                                 st.write(f"• {pred}")
                         
@@ -1019,10 +1019,10 @@ def create_combine_reports_tab():
                         st.session_state['combined_report_generated'] = True
                         
                     else:
-                        st.error("❌ Failed to combine reports. Please check your files and try again.")
+                        st.error("Failed to combine reports. Please check your files and try again.")
                         
                 except Exception as e:
-                    st.error(f"❌ Error combining reports: {str(e)}")
+                    st.error(f"Error combining reports: {str(e)}")
     
     # Download section
     if st.session_state.get('combined_report_generated', False):
@@ -1053,7 +1053,7 @@ def create_combine_reports_tab():
             st.info(f"File: {filename} | Size: {len(json_str.encode('utf-8')) / 1024:.1f} KB")
         
         # Preview section
-        with st.expander("🔍 Preview Combined Report Structure", expanded=False):
+        with st.expander("Preview Combined Report Structure", expanded=False):
             st.json({
                 "combined_report_metadata": combined_report.get("combined_report_metadata", {}),
                 "dataset_overview": "..." if "dataset_overview" in combined_report else "Not included",
@@ -1094,7 +1094,7 @@ def main():
     """Main Streamlit application."""
     st.set_page_config(
         page_title="Impact Modeling Dashboard",
-        page_icon="📊",
+        page_icon="",
         layout="wide",
     )
 
@@ -1106,7 +1106,7 @@ def main():
         st.session_state['df'] = pd.DataFrame()
 
     # File upload section
-    st.subheader("📁 Data Upload")
+    st.subheader("Data Upload")
     uploaded_files = st.file_uploader(
         "Upload your data files",
         type=[t.lstrip('.') for t in SUPPORTED_FILE_TYPES],
@@ -1124,7 +1124,7 @@ def main():
 
     # Create tabs for each model + combine reports tab
     model_names = [m["name"] for m in MODEL_TABLE]
-    all_tab_names = model_names + ["📊 Combine Reports"]
+    all_tab_names = model_names + ["Combine Reports"]
     tabs = st.tabs(all_tab_names)
 
     # Handle model tabs
@@ -1247,11 +1247,11 @@ def main():
                                             st.info(f"**Setup Summary**: Using {train_size} points for training context, {test_size} points for validation, forecasting {prediction_length} future points")
                                             
                                             if test_size < 2:
-                                                st.warning(f"⚠️ Test size is very small ({test_size} points). Consider using a larger test percentage for better validation.")
+                                                st.warning(f"Test size is very small ({test_size} points). Consider using a larger test percentage for better validation.")
                                         
                                         # Seasonal decomposition section
                                         st.markdown("---")
-                                        st.subheader("🔍 Seasonal Decomposition (Optional)")
+                                        st.subheader("Seasonal Decomposition (Optional)")
                                         st.info("Apply seasonal decomposition to improve model performance by removing seasonal patterns from the target variable.")
                                         
                                         use_decomposition = st.checkbox(
@@ -1265,11 +1265,11 @@ def main():
                                         decomposition_period = None
                                         
                                         if use_decomposition:
-                                            decomposition_method, decomposition_period = create_decomposition_ui()
+                                            decomposition_method, decomposition_period = create_decomposition_ui(model_name)
                                         
                                         # Show Apply button only if data is ready
                                         if len(df_for_training) >= 5:
-                                            if st.button("🚀 Apply & Train Model", key=f"apply_{model_name}", type="primary"):
+                                            if st.button("Apply & Train Model", key=f"apply_{model_name}", type="primary"):
                                                 # Store client-specific variables in session state for MLR model
                                                 if model_name == "MLR":
                                                     st.session_state[f"client_specific_vars_{model_name}"] = client_specific_vars
@@ -1315,7 +1315,7 @@ def main():
                     st.error(f"An error occurred: {str(e)}")
                     st.info("Try refreshing the page or checking your data format.")
             else:
-                st.info("📁 Please upload data files using the uploader at the top of the page.")
+                st.info("Please upload data files using the uploader at the top of the page.")
 
     # Handle combine reports tab
     with tabs[-1]:
@@ -1323,7 +1323,7 @@ def main():
 
 def create_data_file_selector():
     """Create a dropdown to select from available data files."""
-    st.subheader("📁 Data File Selection")
+    st.subheader("Data File Selection")
     
     # Get list of available data files
     import glob
@@ -1355,6 +1355,7 @@ def create_data_file_selector():
     selected_display = st.selectbox(
         "Choose a data file:",
         options=list(file_options.keys()),
+        key="data_file_selector",
         help="Select a data file to use for analysis. Files with time series data work best for seasonal decomposition."
     )
     
@@ -1371,15 +1372,15 @@ def create_data_file_selector():
         else:
             df = pd.read_excel(selected_file)
         
-        st.success(f"✅ Loaded {selected_file}")
+        st.success(f"Loaded {selected_file}")
         st.info(f"Data shape: {df.shape[0]} rows × {df.shape[1]} columns")
         
         # Show sample data
-        with st.expander("📊 Sample Data"):
+        with st.expander("Sample Data"):
             st.dataframe(df.head())
         
         # Show column information
-        with st.expander("📋 Column Information"):
+        with st.expander("Column Information"):
             col_info = []
             for col in df.columns:
                 dtype = str(df[col].dtype)

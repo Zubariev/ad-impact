@@ -69,7 +69,7 @@ class DashboardAnalysisIntegrator:
         Returns:
             Comprehensive dashboard data structure
         """
-        print("🔍 Running post-training multicollinearity analysis for dashboard...")
+        print("Running post-training multicollinearity analysis for dashboard...")
         
         # Initialize analyzer
         self.analyzer = MulticollinearityAnalyzer(

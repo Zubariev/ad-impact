@@ -566,7 +566,7 @@ def display_mlr_metrics(df: pd.DataFrame, target: str, features: List[str], mode
                     
                     # Recommendations
                     if client_analysis["business_insights"]["recommendations"]:
-                        st.subheader("📋 Recommendations")
+                        st.subheader("Recommendations")
                         for rec in client_analysis["business_insights"]["recommendations"]:
                             st.info(rec)
                 
@@ -995,7 +995,7 @@ def display_ml_shap_metrics(model: Any, df: pd.DataFrame, target: str) -> None:
             st.info("SHAP analysis may not be available for this model configuration.")
             
             # Provide debugging info
-            with st.expander("🔍 SHAP Debug Information"):
+            with st.expander("SHAP Debug Information"):
                 st.write("**Model Info:**")
                 st.write(f"- Model type: {type(model).__name__}")
                 st.write(f"- Has stored encoders: {hasattr(model, 'label_encoders_')}")
@@ -1066,7 +1066,7 @@ def display_ml_shap_metrics(model: Any, df: pd.DataFrame, target: str) -> None:
         st.error(f"Error computing ML + SHAP metrics: {str(e)}")
         
         # Add debug information for troubleshooting
-        with st.expander("🔍 Error Debug Information"):
+        with st.expander("Error Debug Information"):
             st.write("**Error Details:**")
             st.write(f"- Error: {str(e)}")
             st.write(f"- Target: {target}")
@@ -2686,7 +2686,7 @@ def display_interpretation_hints(model_name: str) -> None:
     """
     hints = create_interpretation_hints(model_name)
     
-    with st.expander("💡 Enhanced Model Interpretation Guide", expanded=False):
+    with st.expander("Enhanced Model Interpretation Guide", expanded=False):
         st.markdown(f"{model_name} Model Interpretation")
         
         for i, hint in enumerate(hints, 1):
@@ -2703,7 +2703,7 @@ def display_interpretation_hints(model_name: str) -> None:
         """)
         
         if model_name in ["MLR", "Distributed Lag"]:
-            st.markdown("### 🔍 **Linear Model Specifics**")
+            st.markdown("### **Linear Model Specifics**")
             st.markdown("""
             - **Multicollinearity**: VIF > 10 suggests problematic correlation
             - **Residuals**: Should be normally distributed and uncorrelated
@@ -2730,7 +2730,7 @@ def display_interpretation_hints(model_name: str) -> None:
             """)
         
         st.markdown("---")
-        st.info("💡 **Tip**: Your comprehensive JSON report contains detailed diagnostics to help validate these interpretation guidelines.")
+        st.info("**Tip**: Your comprehensive JSON report contains detailed diagnostics to help validate these interpretation guidelines.")
 
 
 def create_did_att_chart(
