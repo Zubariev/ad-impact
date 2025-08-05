@@ -55,17 +55,18 @@ class SeasonalDecomposer:
             return min(4, len(data) // 2) if len(data) >= 4 else 2
             
         # Try to detect period based on data frequency
-        if hasattr(data.index, 'freq'):
-            freq = data.index.freq
-            if freq:
-                if freq.name in ['D', 'day']:
-                    return 7  # Weekly seasonality
-                elif freq.name in ['W', 'week']:
-                    return 52  # Yearly seasonality
-                elif freq.name in ['M', 'month']:
-                    return 12  # Yearly seasonality
-                elif freq.name in ['Q', 'quarter']:
-                    return 4  # Quarterly seasonality
+        # Disabled frequency-based detection to avoid timestamp arithmetic issues
+        # if hasattr(data.index, 'freq'):
+        #     freq = data.index.freq
+        #     if freq:
+        #         if freq.name in ['D', 'day']:
+        #             return 7  # Weekly seasonality
+        #         elif freq.name in ['W', 'week']:
+        #             return 52  # Yearly seasonality
+        #         elif freq.name in ['M', 'month']:
+        #             return 12  # Yearly seasonality
+        #         elif freq.name in ['Q', 'quarter']:
+        #             return 4  # Quarterly seasonality
                     
         # If no frequency info, try to detect from data length
         if len(data) >= 24:
@@ -126,7 +127,11 @@ class SeasonalDecomposer:
             Dictionary containing trend, seasonal, residual, and non-seasonal components
         """
         if date_index is not None:
-            data = pd.Series(data.values, index=date_index)
+            # Ensure date_index is properly converted to DatetimeIndex without freq
+            if not isinstance(date_index, pd.DatetimeIndex):
+                date_index = pd.to_datetime(date_index)
+            # Create series without inferring frequency to avoid timestamp arithmetic
+            data = pd.Series(data.values, index=pd.DatetimeIndex(date_index))
             
         self.original_data = data.copy()
         
@@ -161,7 +166,7 @@ class SeasonalDecomposer:
                         residual = decomposition.resid
                     except Exception as stl_error2:
                         logger.warning(f"STL non-robust also failed: {stl_error2}. Falling back to seasonal_decompose.")
-                        decomposition = seasonal_decompose(data, period=self.period, extrapolate_trend='freq')
+                        decomposition = seasonal_decompose(data, period=self.period, extrapolate_trend=1)
                         trend = decomposition.trend
                         seasonal = decomposition.seasonal
                         residual = decomposition.resid
@@ -171,7 +176,7 @@ class SeasonalDecomposer:
                 decomposition = seasonal_decompose(
                     data, 
                     period=self.period, 
-                    extrapolate_trend='freq'
+                    extrapolate_trend=1
                 )
                 trend = decomposition.trend
                 seasonal = decomposition.seasonal
@@ -449,7 +454,16 @@ def apply_seasonal_decomposition(
         logger.info(f"Target series length: {len(target_series)}")
         logger.info(f"Target series range: {target_series.index.min()} to {target_series.index.max()}")
         
-        decomposition_result = decomposer.decompose(target_series, df_copy[date_col])
+        # Ensure datetime index is clean before decomposition
+        clean_date_index = pd.to_datetime(df_copy[date_col], errors='coerce')
+        # Remove any rows where date conversion failed
+        valid_dates = ~clean_date_index.isna()
+        if not valid_dates.all():
+            logger.warning(f"Removing {(~valid_dates).sum()} rows with invalid dates")
+            target_series = target_series[valid_dates]
+            clean_date_index = clean_date_index[valid_dates]
+        
+        decomposition_result = decomposer.decompose(target_series, clean_date_index)
         
         # Replace target with non-seasonal component
         df_copy[f'{target}_original'] = df_copy[target]

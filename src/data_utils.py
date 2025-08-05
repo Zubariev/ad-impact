@@ -523,9 +523,19 @@ def convert_year_week_to_datetime(series: pd.Series) -> pd.Series:
     def year_week_to_date(year_week_str):
         try:
             year, week = year_week_str.split('_')
-            # Convert to datetime using ISO week format
-            return pd.to_datetime(f"{year}-W{week.zfill(2)}-1", format='%Y-W%W-%w')
-        except:
+            year = int(year)
+            week = int(week)
+            
+            # Create datetime for the first day of the year
+            jan_1 = pd.Timestamp(year=year, month=1, day=1)
+            
+            # Calculate the date by adding weeks
+            # Use pd.Timedelta instead of adding integers to timestamps
+            target_date = jan_1 + pd.Timedelta(weeks=week)
+            
+            return target_date
+        except Exception as e:
+            logger.warning(f"Failed to convert {year_week_str}: {e}")
             return pd.NaT
     
     return series.apply(year_week_to_date)

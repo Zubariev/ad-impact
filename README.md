@@ -67,12 +67,12 @@ econ/
 
 2. **Install dependencies**:
    ```bash
-   pip install -r requirements.txt
+   pip3 install -r requirements.txt
    ```
 
 3. **Run the dashboard**:
    ```bash
-   streamlit run app.py
+   python3 -m streamlit run app.py
    ```
 
 ## Usage

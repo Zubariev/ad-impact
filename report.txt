@@ -1,0 +1,2719 @@
+{
+  "report_metadata": {
+    "generated_at": "2025-08-04T12:43:02.050002",
+    "model_name": "ML + SHAP",
+    "report_version": "2.0",
+    "analysis_type": "comprehensive_model_analysis"
+  },
+  "dataset_overview": {
+    "total_observations": 114,
+    "columns_count": 58,
+    "selected_observations": 114,
+    "date_range": {},
+    "missing_data_summary": {
+      "missing_counts": {
+        "vsits_dynamics": 0,
+        "metro_digital_video_sum_of_ad_contacts_with_mobile": 0,
+        "metro_digital_social_sum_of_ad_contacts_with_mobile": 0,
+        "metro_digital_display_sum_of_ad_contacts_with_mobile": 0,
+        "all_regions": 0
+      },
+      "missing_percentages": {
+        "vsits_dynamics": 0.0,
+        "metro_digital_video_sum_of_ad_contacts_with_mobile": 0.0,
+        "metro_digital_social_sum_of_ad_contacts_with_mobile": 0.0,
+        "metro_digital_display_sum_of_ad_contacts_with_mobile": 0.0,
+        "all_regions": 0.0
+      },
+      "total_missing": 0,
+      "completeness_score": 100.0
+    },
+    "descriptive_statistics": {
+      "vsits_dynamics": {
+        "count": 114.0,
+        "mean": 0.2294206214553751,
+        "std": 1.0889992709150895,
+        "min": -0.8873645715179724,
+        "25%": -0.0704807129361881,
+        "50%": 0.004549810918040964,
+        "75%": 0.05879172207296557,
+        "max": 8.041409844604566
+      },
+      "metro_digital_video_sum_of_ad_contacts_with_mobile": {
+        "count": 114.0,
+        "mean": 0.019884377778461016,
+        "std": 0.02595813472353833,
+        "min": 0.0,
+        "25%": 0.0,
+        "50%": 0.007957529762393882,
+        "75%": 0.031035767288325113,
+        "max": 0.12968825843657142
+      },
+      "metro_digital_social_sum_of_ad_contacts_with_mobile": {
+        "count": 114.0,
+        "mean": 0.005606589372293726,
+        "std": 0.00644718494713738,
+        "min": 0.0,
+        "25%": 0.0015654602198047994,
+        "50%": 0.0036353127117209833,
+        "75%": 0.006882894422672644,
+        "max": 0.03848544047857103
+      },
+      "metro_digital_display_sum_of_ad_contacts_with_mobile": {
+        "count": 114.0,
+        "mean": 0.028888729519748108,
+        "std": 0.02586410209538321,
+        "min": 0.0,
+        "25%": 0.011293125064216026,
+        "50%": 0.023706787683070746,
+        "75%": 0.03682649618675489,
+        "max": 0.1640323341429803
+      },
+      "all_regions": {
+        "count": 114.0,
+        "mean": 2949.221052631579,
+        "std": 1355.4570621602668,
+        "min": 458.54999999999995,
+        "25%": 1962.9875,
+        "50%": 2806.0,
+        "75%": 3801.0625000000005,
+        "max": 6574.15
+      }
+    },
+    "outlier_summary": {
+      "vsits_dynamics": {
+        "iqr_method": {
+          "outlier_count": 41,
+          "outlier_percentage": 35.96,
+          "lower_bound": -0.26438936544991865,
+          "upper_bound": 0.2527003745866961
+        },
+        "percentile_99_method": {
+          "threshold": 3.5638584953123553,
+          "outlier_count": 2,
+          "outlier_percentage": 1.75
+        }
+      },
+      "metro_digital_video_sum_of_ad_contacts_with_mobile": {
+        "iqr_method": {
+          "outlier_count": 5,
+          "outlier_percentage": 4.39,
+          "lower_bound": -0.04655365093248767,
+          "upper_bound": 0.07758941822081278
+        },
+        "percentile_99_method": {
+          "threshold": 0.10110823881330987,
+          "outlier_count": 2,
+          "outlier_percentage": 1.75
+        }
+      },
+      "metro_digital_social_sum_of_ad_contacts_with_mobile": {
+        "iqr_method": {
+          "outlier_count": 6,
+          "outlier_percentage": 5.26,
+          "lower_bound": -0.006410691084496967,
+          "upper_bound": 0.01485904572697441
+        },
+        "percentile_99_method": {
+          "threshold": 0.030941467219605785,
+          "outlier_count": 2,
+          "outlier_percentage": 1.75
+        }
+      },
+      "metro_digital_display_sum_of_ad_contacts_with_mobile": {
+        "iqr_method": {
+          "outlier_count": 8,
+          "outlier_percentage": 7.02,
+          "lower_bound": -0.027006931619592268,
+          "upper_bound": 0.07512655287056319
+        },
+        "percentile_99_method": {
+          "threshold": 0.10932353819894793,
+          "outlier_count": 2,
+          "outlier_percentage": 1.75
+        }
+      },
+      "all_regions": {
+        "iqr_method": {
+          "outlier_count": 1,
+          "outlier_percentage": 0.88,
+          "lower_bound": -794.1250000000007,
+          "upper_bound": 6558.175000000001
+        },
+        "percentile_99_method": {
+          "threshold": 6135.097500000001,
+          "outlier_count": 2,
+          "outlier_percentage": 1.75
+        }
+      }
+    }
+  },
+  "comprehensive_dataset_analysis": {
+    "filename": "ML + SHAP_dataset",
+    "shape": {
+      "rows": 114,
+      "columns": 58
+    },
+    "total_cells": 6612,
+    "memory_usage_mb": 0.05663299560546875,
+    "column_count": 58,
+    "row_count": 114,
+    "duplicate_rows": 0,
+    "columns_analysis": {
+      "id": {
+        "data_type": "int64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 56.5,
+        "median": 56.5,
+        "std": 33.05298776207682,
+        "variance": 1092.5,
+        "min": 0.0,
+        "max": 113.0,
+        "range": 113.0,
+        "q25": 28.25,
+        "q75": 84.75,
+        "iqr": 56.5,
+        "skewness": 0.0,
+        "kurtosis": -1.2001846864178531,
+        "unique_count": 114,
+        "zero_count": 1,
+        "negative_count": 0,
+        "positive_count": 113,
+        "outliers_count": 0,
+        "outliers_percentage": 0.0,
+        "column_type": "numeric"
+      },
+      "y&w": {
+        "data_type": "object",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "unique_count": 114,
+        "most_frequent": {
+          "2023_0": 1,
+          "2024_33": 1,
+          "2024_31": 1,
+          "2024_30": 1,
+          "2024_29": 1,
+          "2024_28": 1,
+          "2024_27": 1,
+          "2024_26": 1,
+          "2024_25": 1,
+          "2024_24": 1
+        },
+        "mode": "2023_0",
+        "unique_values_sample": [
+          "2023_0",
+          "2023_1",
+          "2023_2",
+          "2023_3",
+          "2023_4",
+          "2023_5",
+          "2023_6",
+          "2023_7",
+          "2023_8",
+          "2023_9",
+          "2023_10",
+          "2023_11",
+          "2023_12",
+          "2023_13",
+          "2023_14",
+          "2023_15",
+          "2023_16",
+          "2023_17",
+          "2023_18",
+          "2023_19"
+        ],
+        "unique_values_note": "Too many unique values (114). Showing first 20.",
+        "avg_string_length": 6.754385964912281,
+        "min_string_length": 6,
+        "max_string_length": 7,
+        "empty_strings": 0,
+        "column_type": "categorical"
+      },
+      "atb_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0704822950085706,
+        "median": 0.06512430591457655,
+        "std": 0.0328966185719895,
+        "variance": 0.0010821875134709646,
+        "min": 0.0,
+        "max": 0.1579178806945204,
+        "range": 0.1579178806945204,
+        "q25": 0.04473185617644631,
+        "q75": 0.09574047948817183,
+        "iqr": 0.051008623311725516,
+        "skewness": 0.5841487387810073,
+        "kurtosis": -0.25880313376755604,
+        "unique_count": 114,
+        "zero_count": 1,
+        "negative_count": 0,
+        "positive_count": 113,
+        "outliers_count": 0,
+        "outliers_percentage": 0.0,
+        "column_type": "numeric"
+      },
+      "atb_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.020452002010838116,
+        "median": 0.010258787786090438,
+        "std": 0.02986373050018243,
+        "variance": 0.0008918423993875265,
+        "min": 0.0,
+        "max": 0.20074692163349223,
+        "range": 0.20074692163349223,
+        "q25": 0.004212125085708678,
+        "q75": 0.025445350798352247,
+        "iqr": 0.02123322571264357,
+        "skewness": 3.5778474378860814,
+        "kurtosis": 15.718450616213165,
+        "unique_count": 109,
+        "zero_count": 6,
+        "negative_count": 0,
+        "positive_count": 108,
+        "outliers_count": 8,
+        "outliers_percentage": 7.017543859649122,
+        "column_type": "numeric"
+      },
+      "atb_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.005432752140861246,
+        "median": 0.0023677205265581667,
+        "std": 0.008770656460795672,
+        "variance": 7.692441475329688e-05,
+        "min": 0.0,
+        "max": 0.05075683985883514,
+        "range": 0.05075683985883514,
+        "q25": 0.0008230491550893045,
+        "q75": 0.006272997644696944,
+        "iqr": 0.00544994848960764,
+        "skewness": 3.172201924557128,
+        "kurtosis": 11.279704058646917,
+        "unique_count": 99,
+        "zero_count": 16,
+        "negative_count": 0,
+        "positive_count": 98,
+        "outliers_count": 10,
+        "outliers_percentage": 8.771929824561402,
+        "column_type": "numeric"
+      },
+      "auchan_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.049021296924223336,
+        "median": 0.04032333175474567,
+        "std": 0.03569191682837004,
+        "variance": 0.0012739129268832846,
+        "min": 0.0,
+        "max": 0.15404463773083943,
+        "range": 0.15404463773083943,
+        "q25": 0.024737469913961883,
+        "q75": 0.06952337728546419,
+        "iqr": 0.04478590737150231,
+        "skewness": 1.0458153235327585,
+        "kurtosis": 0.689890002720503,
+        "unique_count": 114,
+        "zero_count": 1,
+        "negative_count": 0,
+        "positive_count": 113,
+        "outliers_count": 4,
+        "outliers_percentage": 3.508771929824561,
+        "column_type": "numeric"
+      },
+      "auchan_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0017125907926300908,
+        "median": 0.0,
+        "std": 0.0049184315421382675,
+        "variance": 2.4190968834700617e-05,
+        "min": 0.0,
+        "max": 0.03071983153618075,
+        "range": 0.03071983153618075,
+        "q25": 0.0,
+        "q75": 0.0007364922794198151,
+        "iqr": 0.0007364922794198151,
+        "skewness": 4.236660407070165,
+        "kurtosis": 19.022554398801656,
+        "unique_count": 39,
+        "zero_count": 76,
+        "negative_count": 0,
+        "positive_count": 38,
+        "outliers_count": 20,
+        "outliers_percentage": 17.543859649122805,
+        "column_type": "numeric"
+      },
+      "auchan_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0025247152574975748,
+        "median": 0.001609492355986291,
+        "std": 0.003812844096954047,
+        "variance": 1.453778010767732e-05,
+        "min": 0.0,
+        "max": 0.025921553534440603,
+        "range": 0.025921553534440603,
+        "q25": 0.0005198419304347692,
+        "q75": 0.003004649714243021,
+        "iqr": 0.0024848077838082517,
+        "skewness": 3.5561951690258473,
+        "kurtosis": 14.907974322753383,
+        "unique_count": 95,
+        "zero_count": 20,
+        "negative_count": 0,
+        "positive_count": 94,
+        "outliers_count": 7,
+        "outliers_percentage": 6.140350877192982,
+        "column_type": "numeric"
+      },
+      "eko-market_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.002350612436759247,
+        "median": 0.0,
+        "std": 0.015004850369799656,
+        "variance": 0.00022514553462007686,
+        "min": 0.0,
+        "max": 0.15601741838650074,
+        "range": 0.15601741838650074,
+        "q25": 0.0,
+        "q75": 0.00029969013917667753,
+        "iqr": 0.00029969013917667753,
+        "skewness": 9.651207062630268,
+        "kurtosis": 95.44646970515818,
+        "unique_count": 38,
+        "zero_count": 77,
+        "negative_count": 0,
+        "positive_count": 37,
+        "outliers_count": 21,
+        "outliers_percentage": 18.421052631578945,
+        "column_type": "numeric"
+      },
+      "eko-market_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0008365606997564138,
+        "median": 0.0,
+        "std": 0.001727755516469869,
+        "variance": 2.9851391246920637e-06,
+        "min": 0.0,
+        "max": 0.01091255263202007,
+        "range": 0.01091255263202007,
+        "q25": 0.0,
+        "q75": 0.0009860110264012477,
+        "iqr": 0.0009860110264012477,
+        "skewness": 3.0407941067214193,
+        "kurtosis": 11.575292677728307,
+        "unique_count": 41,
+        "zero_count": 74,
+        "negative_count": 0,
+        "positive_count": 40,
+        "outliers_count": 15,
+        "outliers_percentage": 13.157894736842104,
+        "column_type": "numeric"
+      },
+      "eko-market_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 6.736920974497878e-05,
+        "median": 0.0,
+        "std": 0.0002578735609667492,
+        "variance": 6.649877344567173e-08,
+        "min": 0.0,
+        "max": 0.0017460114236772864,
+        "range": 0.0017460114236772864,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 5.033306046537991,
+        "kurtosis": 26.311191673461412,
+        "unique_count": 15,
+        "zero_count": 100,
+        "negative_count": 0,
+        "positive_count": 14,
+        "outliers_count": 14,
+        "outliers_percentage": 12.280701754385964,
+        "column_type": "numeric"
+      },
+      "fora_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.04453675355014576,
+        "median": 0.03617449738158734,
+        "std": 0.035929594276647804,
+        "variance": 0.0012909357448845226,
+        "min": 0.0,
+        "max": 0.20000965841959675,
+        "range": 0.20000965841959675,
+        "q25": 0.021637187952073395,
+        "q75": 0.05756743533183843,
+        "iqr": 0.03593024737976504,
+        "skewness": 1.701111213319206,
+        "kurtosis": 3.6928730928951135,
+        "unique_count": 114,
+        "zero_count": 1,
+        "negative_count": 0,
+        "positive_count": 113,
+        "outliers_count": 6,
+        "outliers_percentage": 5.263157894736842,
+        "column_type": "numeric"
+      },
+      "fora_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.029313351075632415,
+        "median": 0.012697669637028968,
+        "std": 0.04381758236527737,
+        "variance": 0.0019199805243378665,
+        "min": 0.0,
+        "max": 0.31287420941781313,
+        "range": 0.31287420941781313,
+        "q25": 0.004420227551045312,
+        "q75": 0.031919867366299266,
+        "iqr": 0.027499639815253954,
+        "skewness": 3.5047710757985606,
+        "kurtosis": 16.731372796519203,
+        "unique_count": 110,
+        "zero_count": 5,
+        "negative_count": 0,
+        "positive_count": 109,
+        "outliers_count": 14,
+        "outliers_percentage": 12.280701754385964,
+        "column_type": "numeric"
+      },
+      "fora_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0021109603687489236,
+        "median": 0.0006682700612456725,
+        "std": 0.00364104269585214,
+        "variance": 1.325719191301822e-05,
+        "min": 0.0,
+        "max": 0.020048994089927306,
+        "range": 0.020048994089927306,
+        "q25": 0.0,
+        "q75": 0.0018897654549451795,
+        "iqr": 0.0018897654549451795,
+        "skewness": 2.5125589867842533,
+        "kurtosis": 6.479685589982852,
+        "unique_count": 78,
+        "zero_count": 37,
+        "negative_count": 0,
+        "positive_count": 77,
+        "outliers_count": 16,
+        "outliers_percentage": 14.035087719298245,
+        "column_type": "numeric"
+      },
+      "fozzy_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.002817055644380445,
+        "median": 1.1256134669685853e-05,
+        "std": 0.005258786144140798,
+        "variance": 2.765483170980724e-05,
+        "min": 0.0,
+        "max": 0.024051389527100193,
+        "range": 0.024051389527100193,
+        "q25": 0.0,
+        "q75": 0.0032086860354713104,
+        "iqr": 0.0032086860354713104,
+        "skewness": 2.1126621361629176,
+        "kurtosis": 3.816577118050019,
+        "unique_count": 58,
+        "zero_count": 57,
+        "negative_count": 0,
+        "positive_count": 57,
+        "outliers_count": 17,
+        "outliers_percentage": 14.912280701754385,
+        "column_type": "numeric"
+      },
+      "fozzy_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0005601479244177336,
+        "median": 0.0,
+        "std": 0.0019439711002599118,
+        "variance": 3.779023638645732e-06,
+        "min": 0.0,
+        "max": 0.014830240517253056,
+        "range": 0.014830240517253056,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 4.985251776559343,
+        "kurtosis": 28.548964815721174,
+        "unique_count": 22,
+        "zero_count": 93,
+        "negative_count": 0,
+        "positive_count": 21,
+        "outliers_count": 21,
+        "outliers_percentage": 18.421052631578945,
+        "column_type": "numeric"
+      },
+      "fozzy_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.000517575423596987,
+        "median": 0.0,
+        "std": 0.004533490382353672,
+        "variance": 2.0552535046893244e-05,
+        "min": 0.0,
+        "max": 0.04840819400677532,
+        "range": 0.04840819400677532,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 10.477135136525622,
+        "kurtosis": 108.17820752375441,
+        "unique_count": 21,
+        "zero_count": 94,
+        "negative_count": 0,
+        "positive_count": 20,
+        "outliers_count": 20,
+        "outliers_percentage": 17.543859649122805,
+        "column_type": "numeric"
+      },
+      "fozzyshop_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.005268465024082911,
+        "median": 0.0006575125423724849,
+        "std": 0.00794470143823325,
+        "variance": 6.311828094266548e-05,
+        "min": 0.0,
+        "max": 0.0364948279048314,
+        "range": 0.0364948279048314,
+        "q25": 0.0,
+        "q75": 0.008741278838801549,
+        "iqr": 0.008741278838801549,
+        "skewness": 1.9703109098386995,
+        "kurtosis": 3.8670625160079872,
+        "unique_count": 79,
+        "zero_count": 36,
+        "negative_count": 0,
+        "positive_count": 78,
+        "outliers_count": 5,
+        "outliers_percentage": 4.385964912280701,
+        "column_type": "numeric"
+      },
+      "fozzyshop_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0036565370579054145,
+        "median": 0.001307708349256342,
+        "std": 0.005849075877419785,
+        "variance": 3.4211688619814025e-05,
+        "min": 0.0,
+        "max": 0.03168797316513485,
+        "range": 0.03168797316513485,
+        "q25": 0.0,
+        "q75": 0.004645116074642298,
+        "iqr": 0.004645116074642298,
+        "skewness": 2.4708644669587607,
+        "kurtosis": 6.628420057368375,
+        "unique_count": 76,
+        "zero_count": 39,
+        "negative_count": 0,
+        "positive_count": 75,
+        "outliers_count": 11,
+        "outliers_percentage": 9.649122807017543,
+        "column_type": "numeric"
+      },
+      "fozzyshop_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.000600314186511541,
+        "median": 0.0,
+        "std": 0.0011977990809379745,
+        "variance": 1.4347226382958563e-06,
+        "min": 0.0,
+        "max": 0.0058294553941882,
+        "range": 0.0058294553941882,
+        "q25": 0.0,
+        "q75": 0.000566646091738204,
+        "iqr": 0.000566646091738204,
+        "skewness": 2.3081857192431228,
+        "kurtosis": 4.9530571479257794,
+        "unique_count": 39,
+        "zero_count": 76,
+        "negative_count": 0,
+        "positive_count": 38,
+        "outliers_count": 21,
+        "outliers_percentage": 18.421052631578945,
+        "column_type": "numeric"
+      },
+      "le_silpo_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "int64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0,
+        "median": 0.0,
+        "std": 0.0,
+        "variance": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "range": 0.0,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": null,
+        "kurtosis": null,
+        "unique_count": 1,
+        "zero_count": 114,
+        "negative_count": 0,
+        "positive_count": 0,
+        "outliers_count": 0,
+        "outliers_percentage": 0.0,
+        "column_type": "numeric"
+      },
+      "megamarket_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 1.091175972022442e-05,
+        "median": 0.0,
+        "std": 6.639852476839334e-05,
+        "variance": 4.408764091418944e-09,
+        "min": 0.0,
+        "max": 0.0004999219934848751,
+        "range": 0.0004999219934848751,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 6.769872474798366,
+        "kurtosis": 45.63550311036283,
+        "unique_count": 6,
+        "zero_count": 109,
+        "negative_count": 0,
+        "positive_count": 5,
+        "outliers_count": 5,
+        "outliers_percentage": 4.385964912280701,
+        "column_type": "numeric"
+      },
+      "megamarket_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.00039212393676266947,
+        "median": 0.0,
+        "std": 0.0017036053167551065,
+        "variance": 2.902271075276267e-06,
+        "min": 0.0,
+        "max": 0.013785913226559626,
+        "range": 0.013785913226559626,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 5.774556669930294,
+        "kurtosis": 37.041126316872436,
+        "unique_count": 13,
+        "zero_count": 102,
+        "negative_count": 0,
+        "positive_count": 12,
+        "outliers_count": 12,
+        "outliers_percentage": 10.526315789473683,
+        "column_type": "numeric"
+      },
+      "metro_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.028888729519748108,
+        "median": 0.023706787683070746,
+        "std": 0.02586410209538321,
+        "variance": 0.0006689517772004062,
+        "min": 0.0,
+        "max": 0.1640323341429803,
+        "range": 0.1640323341429803,
+        "q25": 0.011293125064216026,
+        "q75": 0.03682649618675489,
+        "iqr": 0.025533371122538864,
+        "skewness": 2.0408315833070936,
+        "kurtosis": 6.207158871746868,
+        "unique_count": 113,
+        "zero_count": 2,
+        "negative_count": 0,
+        "positive_count": 112,
+        "outliers_count": 8,
+        "outliers_percentage": 7.017543859649122,
+        "column_type": "numeric"
+      },
+      "metro_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.019884377778461016,
+        "median": 0.007957529762393882,
+        "std": 0.02595813472353833,
+        "variance": 0.0006738247583253663,
+        "min": 0.0,
+        "max": 0.12968825843657142,
+        "range": 0.12968825843657142,
+        "q25": 0.0,
+        "q75": 0.031035767288325113,
+        "iqr": 0.031035767288325113,
+        "skewness": 1.6803308628667595,
+        "kurtosis": 2.818264149120604,
+        "unique_count": 84,
+        "zero_count": 31,
+        "negative_count": 0,
+        "positive_count": 83,
+        "outliers_count": 5,
+        "outliers_percentage": 4.385964912280701,
+        "column_type": "numeric"
+      },
+      "metro_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.005606589372293726,
+        "median": 0.0036353127117209833,
+        "std": 0.00644718494713738,
+        "variance": 4.156619374259482e-05,
+        "min": 0.0,
+        "max": 0.03848544047857103,
+        "range": 0.03848544047857103,
+        "q25": 0.0015654602198047994,
+        "q75": 0.006882894422672644,
+        "iqr": 0.005317434202867844,
+        "skewness": 2.7184202817794176,
+        "kurtosis": 8.801541150757815,
+        "unique_count": 111,
+        "zero_count": 4,
+        "negative_count": 0,
+        "positive_count": 110,
+        "outliers_count": 6,
+        "outliers_percentage": 5.263157894736842,
+        "column_type": "numeric"
+      },
+      "novus_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.005253463532796912,
+        "median": 0.0017183007453716625,
+        "std": 0.013724408695473384,
+        "variance": 0.00018835939404038545,
+        "min": 0.0,
+        "max": 0.13166254373173908,
+        "range": 0.13166254373173908,
+        "q25": 0.0,
+        "q75": 0.005628659811993805,
+        "iqr": 0.005628659811993805,
+        "skewness": 7.288124872216508,
+        "kurtosis": 62.23092906536802,
+        "unique_count": 85,
+        "zero_count": 30,
+        "negative_count": 0,
+        "positive_count": 84,
+        "outliers_count": 9,
+        "outliers_percentage": 7.894736842105263,
+        "column_type": "numeric"
+      },
+      "novus_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0038699782441907675,
+        "median": 0.0015109807253130077,
+        "std": 0.006692743103934559,
+        "variance": 4.4792810255263594e-05,
+        "min": 0.0,
+        "max": 0.03972877105981172,
+        "range": 0.03972877105981172,
+        "q25": 0.0,
+        "q75": 0.004610684823093608,
+        "iqr": 0.004610684823093608,
+        "skewness": 3.4450152220157126,
+        "kurtosis": 14.012342144126006,
+        "unique_count": 73,
+        "zero_count": 42,
+        "negative_count": 0,
+        "positive_count": 72,
+        "outliers_count": 9,
+        "outliers_percentage": 7.894736842105263,
+        "column_type": "numeric"
+      },
+      "novus_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0009036150582245804,
+        "median": 0.00035179776801093354,
+        "std": 0.001484259537156963,
+        "variance": 2.203026373641402e-06,
+        "min": 0.0,
+        "max": 0.01155244520593288,
+        "range": 0.01155244520593288,
+        "q25": 0.0,
+        "q75": 0.001215597340254408,
+        "iqr": 0.001215597340254408,
+        "skewness": 3.937661938497765,
+        "kurtosis": 22.69788232747192,
+        "unique_count": 74,
+        "zero_count": 41,
+        "negative_count": 0,
+        "positive_count": 73,
+        "outliers_count": 5,
+        "outliers_percentage": 4.385964912280701,
+        "column_type": "numeric"
+      },
+      "novus_online_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.00039364494505887807,
+        "median": 0.0,
+        "std": 0.0009873402058994773,
+        "variance": 9.748406821856221e-07,
+        "min": 0.0,
+        "max": 0.006223537968465116,
+        "range": 0.006223537968465116,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 3.2169134621436153,
+        "kurtosis": 11.822872606933691,
+        "unique_count": 27,
+        "zero_count": 88,
+        "negative_count": 0,
+        "positive_count": 26,
+        "outliers_count": 26,
+        "outliers_percentage": 22.807017543859647,
+        "column_type": "numeric"
+      },
+      "novus_online_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 2.4563261166464216e-05,
+        "median": 0.0,
+        "std": 0.00018524899728771056,
+        "variance": 3.431719099610219e-08,
+        "min": 0.0,
+        "max": 0.0018503918892418258,
+        "range": 0.0018503918892418258,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 8.89870129780545,
+        "kurtosis": 82.55282546583808,
+        "unique_count": 4,
+        "zero_count": 111,
+        "negative_count": 0,
+        "positive_count": 3,
+        "outliers_count": 3,
+        "outliers_percentage": 2.631578947368421,
+        "column_type": "numeric"
+      },
+      "novus_online_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0001339339250489425,
+        "median": 0.0,
+        "std": 0.0006390088356678561,
+        "variance": 4.083322920615892e-07,
+        "min": 0.0,
+        "max": 0.004821170606607653,
+        "range": 0.004821170606607653,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 5.9775792114193855,
+        "kurtosis": 37.08290032925367,
+        "unique_count": 12,
+        "zero_count": 103,
+        "negative_count": 0,
+        "positive_count": 11,
+        "outliers_count": 11,
+        "outliers_percentage": 9.649122807017543,
+        "column_type": "numeric"
+      },
+      "shuvar_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.00022175849446124445,
+        "median": 0.0,
+        "std": 0.0006406229700450304,
+        "variance": 4.103977897493159e-07,
+        "min": 0.0,
+        "max": 0.0037203350650692134,
+        "range": 0.0037203350650692134,
+        "q25": 0.0,
+        "q75": 1.631528616673977e-05,
+        "iqr": 1.631528616673977e-05,
+        "skewness": 4.124261625360792,
+        "kurtosis": 18.10718144508116,
+        "unique_count": 30,
+        "zero_count": 85,
+        "negative_count": 0,
+        "positive_count": 29,
+        "outliers_count": 26,
+        "outliers_percentage": 22.807017543859647,
+        "column_type": "numeric"
+      },
+      "shuvar_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 9.736312413987252e-05,
+        "median": 0.0,
+        "std": 0.00039444199454312455,
+        "variance": 1.5558448705915828e-07,
+        "min": 0.0,
+        "max": 0.0028660639529373413,
+        "range": 0.0028660639529373413,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 5.2063066706659,
+        "kurtosis": 28.52313635935875,
+        "unique_count": 14,
+        "zero_count": 101,
+        "negative_count": 0,
+        "positive_count": 13,
+        "outliers_count": 13,
+        "outliers_percentage": 11.403508771929824,
+        "column_type": "numeric"
+      },
+      "shuvar_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 3.4629347587406054e-06,
+        "median": 0.0,
+        "std": 3.697402540075263e-05,
+        "variance": 1.3670785543355005e-09,
+        "min": 0.0,
+        "max": 0.000394774562496429,
+        "range": 0.000394774562496429,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 10.53607372589627,
+        "kurtosis": 109.008849557522,
+        "unique_count": 2,
+        "zero_count": 113,
+        "negative_count": 0,
+        "positive_count": 1,
+        "outliers_count": 1,
+        "outliers_percentage": 0.8771929824561403,
+        "column_type": "numeric"
+      },
+      "silpo_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.44291339457827245,
+        "median": 0.45721375526008645,
+        "std": 0.1246665133694549,
+        "variance": 0.015541739555696477,
+        "min": 0.0,
+        "max": 0.6796910666122552,
+        "range": 0.6796910666122552,
+        "q25": 0.3610010701775843,
+        "q75": 0.5222354553391343,
+        "iqr": 0.16123438516154998,
+        "skewness": -0.6644052613586658,
+        "kurtosis": 0.4711101874730157,
+        "unique_count": 114,
+        "zero_count": 1,
+        "negative_count": 0,
+        "positive_count": 113,
+        "outliers_count": 1,
+        "outliers_percentage": 0.8771929824561403,
+        "column_type": "numeric"
+      },
+      "silpo_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.1444485962815756,
+        "median": 0.1286570343186973,
+        "std": 0.06724578216274228,
+        "variance": 0.004521995218678988,
+        "min": 0.0,
+        "max": 0.36164838337348176,
+        "range": 0.36164838337348176,
+        "q25": 0.0985865612952046,
+        "q75": 0.1713828094607344,
+        "iqr": 0.07279624816552979,
+        "skewness": 1.0984471379373022,
+        "kurtosis": 1.0975224619614616,
+        "unique_count": 114,
+        "zero_count": 1,
+        "negative_count": 0,
+        "positive_count": 113,
+        "outliers_count": 6,
+        "outliers_percentage": 5.263157894736842,
+        "column_type": "numeric"
+      },
+      "silpo_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.016633579682287486,
+        "median": 0.011184470077682862,
+        "std": 0.01732762952840842,
+        "variance": 0.00030024674507377134,
+        "min": 0.0,
+        "max": 0.1199774147299719,
+        "range": 0.1199774147299719,
+        "q25": 0.007860023890253524,
+        "q75": 0.017329523805825486,
+        "iqr": 0.009469499915571961,
+        "skewness": 3.6240930983238404,
+        "kurtosis": 15.634016250039263,
+        "unique_count": 114,
+        "zero_count": 1,
+        "negative_count": 0,
+        "positive_count": 113,
+        "outliers_count": 11,
+        "outliers_percentage": 9.649122807017543,
+        "column_type": "numeric"
+      },
+      "tavria_v_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 4.3575332839625295e-05,
+        "median": 0.0,
+        "std": 0.00025780045174240003,
+        "variance": 6.646107291858552e-08,
+        "min": 0.0,
+        "max": 0.0025171012278077205,
+        "range": 0.0025171012278077205,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 8.222869795389606,
+        "kurtosis": 73.61821275936451,
+        "unique_count": 8,
+        "zero_count": 107,
+        "negative_count": 0,
+        "positive_count": 7,
+        "outliers_count": 7,
+        "outliers_percentage": 6.140350877192982,
+        "column_type": "numeric"
+      },
+      "tavria_v_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.003653105943658309,
+        "median": 0.0,
+        "std": 0.019440733917754045,
+        "variance": 0.0003779421352609125,
+        "min": 0.0,
+        "max": 0.15336742302589904,
+        "range": 0.15336742302589904,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 5.963060705418418,
+        "kurtosis": 37.00591138656952,
+        "unique_count": 10,
+        "zero_count": 105,
+        "negative_count": 0,
+        "positive_count": 9,
+        "outliers_count": 9,
+        "outliers_percentage": 7.894736842105263,
+        "column_type": "numeric"
+      },
+      "varus_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.03988178878810042,
+        "median": 0.02201772944754869,
+        "std": 0.04005853371560908,
+        "variance": 0.0016046861234445895,
+        "min": 0.0,
+        "max": 0.17031479142467212,
+        "range": 0.17031479142467212,
+        "q25": 0.010342875542251996,
+        "q75": 0.0626943677091757,
+        "iqr": 0.05235149216692371,
+        "skewness": 1.2095509348183355,
+        "kurtosis": 0.7326342035051092,
+        "unique_count": 113,
+        "zero_count": 2,
+        "negative_count": 0,
+        "positive_count": 112,
+        "outliers_count": 3,
+        "outliers_percentage": 2.631578947368421,
+        "column_type": "numeric"
+      },
+      "varus_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.00862090630161982,
+        "median": 0.00600580399842154,
+        "std": 0.008487384083064655,
+        "variance": 7.203568857345925e-05,
+        "min": 0.0,
+        "max": 0.05243518843412662,
+        "range": 0.05243518843412662,
+        "q25": 0.0034792073570284548,
+        "q75": 0.010766751216897486,
+        "iqr": 0.007287543859869031,
+        "skewness": 2.2286970759971916,
+        "kurtosis": 6.509261899499474,
+        "unique_count": 113,
+        "zero_count": 2,
+        "negative_count": 0,
+        "positive_count": 112,
+        "outliers_count": 8,
+        "outliers_percentage": 7.017543859649122,
+        "column_type": "numeric"
+      },
+      "varus_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.003547029581119918,
+        "median": 0.0009206752119151322,
+        "std": 0.007687959824797587,
+        "variance": 5.9104726267701756e-05,
+        "min": 0.0,
+        "max": 0.04718051098501762,
+        "range": 0.04718051098501762,
+        "q25": 0.0,
+        "q75": 0.0026108754129616505,
+        "iqr": 0.0026108754129616505,
+        "skewness": 3.5669525919677025,
+        "kurtosis": 14.154424381347592,
+        "unique_count": 85,
+        "zero_count": 30,
+        "negative_count": 0,
+        "positive_count": 84,
+        "outliers_count": 17,
+        "outliers_percentage": 14.912280701754385,
+        "column_type": "numeric"
+      },
+      "velmart_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.009716478221237447,
+        "median": 0.0,
+        "std": 0.016130385162447882,
+        "variance": 0.0002601893254889188,
+        "min": 0.0,
+        "max": 0.0635615800061847,
+        "range": 0.0635615800061847,
+        "q25": 0.0,
+        "q75": 0.01379148556342392,
+        "iqr": 0.01379148556342392,
+        "skewness": 1.7059043403952743,
+        "kurtosis": 1.8497644085917289,
+        "unique_count": 52,
+        "zero_count": 63,
+        "negative_count": 0,
+        "positive_count": 51,
+        "outliers_count": 13,
+        "outliers_percentage": 11.403508771929824,
+        "column_type": "numeric"
+      },
+      "velmart_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0035468780299470495,
+        "median": 0.0,
+        "std": 0.009272562178561743,
+        "variance": 8.598040935529371e-05,
+        "min": 0.0,
+        "max": 0.05968200369076828,
+        "range": 0.05968200369076828,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 3.686486374536464,
+        "kurtosis": 15.37320063226279,
+        "unique_count": 29,
+        "zero_count": 86,
+        "negative_count": 0,
+        "positive_count": 28,
+        "outliers_count": 28,
+        "outliers_percentage": 24.561403508771928,
+        "column_type": "numeric"
+      },
+      "velmart_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 2.5633057173173273e-05,
+        "median": 0.0,
+        "std": 0.00017557312841906953,
+        "variance": 3.082592342285908e-08,
+        "min": 0.0,
+        "max": 0.0016537177339104392,
+        "range": 0.0016537177339104392,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 7.88168596536035,
+        "kurtosis": 65.98811247156402,
+        "unique_count": 4,
+        "zero_count": 111,
+        "negative_count": 0,
+        "positive_count": 3,
+        "outliers_count": 3,
+        "outliers_percentage": 2.631578947368421,
+        "column_type": "numeric"
+      },
+      "vova.ua_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 1.1600175526098055e-05,
+        "median": 0.0,
+        "std": 6.593288035736206e-05,
+        "variance": 4.34714471221822e-09,
+        "min": 0.0,
+        "max": 0.0004999219934848751,
+        "range": 0.0004999219934848751,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 6.085009871912917,
+        "kurtosis": 37.464647802715646,
+        "unique_count": 5,
+        "zero_count": 110,
+        "negative_count": 0,
+        "positive_count": 4,
+        "outliers_count": 4,
+        "outliers_percentage": 3.508771929824561,
+        "column_type": "numeric"
+      },
+      "zakaz_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0009986614910159127,
+        "median": 0.0,
+        "std": 0.0023251934976112735,
+        "variance": 5.406524801333748e-06,
+        "min": 0.0,
+        "max": 0.013133126036042183,
+        "range": 0.013133126036042183,
+        "q25": 0.0,
+        "q75": 0.0004196722949247438,
+        "iqr": 0.0004196722949247438,
+        "skewness": 2.8696048836194614,
+        "kurtosis": 8.46026483850454,
+        "unique_count": 40,
+        "zero_count": 75,
+        "negative_count": 0,
+        "positive_count": 39,
+        "outliers_count": 21,
+        "outliers_percentage": 18.421052631578945,
+        "column_type": "numeric"
+      },
+      "zakaz_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0059979702500755775,
+        "median": 0.004723488429035985,
+        "std": 0.005860089002821326,
+        "variance": 3.434064312098745e-05,
+        "min": 0.0,
+        "max": 0.026745830725730065,
+        "range": 0.026745830725730065,
+        "q25": 0.0005967105897183788,
+        "q75": 0.009682059357506167,
+        "iqr": 0.009085348767787788,
+        "skewness": 1.1082172666036345,
+        "kurtosis": 1.0721412701052193,
+        "unique_count": 91,
+        "zero_count": 24,
+        "negative_count": 0,
+        "positive_count": 90,
+        "outliers_count": 3,
+        "outliers_percentage": 2.631578947368421,
+        "column_type": "numeric"
+      },
+      "zakaz_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0016832781129238117,
+        "median": 0.0,
+        "std": 0.0055024698703328686,
+        "variance": 3.0277174673921013e-05,
+        "min": 0.0,
+        "max": 0.047187462790137254,
+        "range": 0.047187462790137254,
+        "q25": 0.0,
+        "q75": 0.0001461186292486109,
+        "iqr": 0.0001461186292486109,
+        "skewness": 5.679955195258297,
+        "kurtosis": 40.28243243029974,
+        "unique_count": 34,
+        "zero_count": 81,
+        "negative_count": 0,
+        "positive_count": 33,
+        "outliers_count": 23,
+        "outliers_percentage": 20.175438596491226,
+        "column_type": "numeric"
+      },
+      "zakaz_atb_digital_display_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 1.407880831957523e-05,
+        "median": 0.0,
+        "std": 0.00012957826293163587,
+        "variance": 1.679052622438016e-08,
+        "min": 0.0,
+        "max": 0.0013646035707973677,
+        "range": 0.0013646035707973677,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 10.109499404533928,
+        "kurtosis": 102.43198637244012,
+        "unique_count": 3,
+        "zero_count": 112,
+        "negative_count": 0,
+        "positive_count": 2,
+        "outliers_count": 2,
+        "outliers_percentage": 1.7543859649122806,
+        "column_type": "numeric"
+      },
+      "zakaz_atb_digital_video_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0007789025163730051,
+        "median": 0.0,
+        "std": 0.003064580876094197,
+        "variance": 9.391655946122277e-06,
+        "min": 0.0,
+        "max": 0.02542928695980492,
+        "range": 0.02542928695980492,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 5.840208742930539,
+        "kurtosis": 39.04097484512745,
+        "unique_count": 19,
+        "zero_count": 96,
+        "negative_count": 0,
+        "positive_count": 18,
+        "outliers_count": 18,
+        "outliers_percentage": 15.789473684210526,
+        "column_type": "numeric"
+      },
+      "zakaz_atb_digital_social_sum_of_ad_contacts_with_mobile": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.0007667424002374288,
+        "median": 0.0,
+        "std": 0.005654340762331043,
+        "variance": 3.19715694565584e-05,
+        "min": 0.0,
+        "max": 0.05756086970942874,
+        "range": 0.05756086970942874,
+        "q25": 0.0,
+        "q75": 0.0,
+        "iqr": 0.0,
+        "skewness": 9.263064160106754,
+        "kurtosis": 88.65281938963906,
+        "unique_count": 10,
+        "zero_count": 105,
+        "negative_count": 0,
+        "positive_count": 9,
+        "outliers_count": 9,
+        "outliers_percentage": 7.894736842105263,
+        "column_type": "numeric"
+      },
+      "total_visit": {
+        "data_type": "int64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 186150.5350877193,
+        "median": 200497.0,
+        "std": 52126.55484562526,
+        "variance": 2717177720.0739784,
+        "min": 23038.0,
+        "max": 321348.0,
+        "range": 298310.0,
+        "q25": 187837.75,
+        "q75": 206591.25,
+        "iqr": 18753.5,
+        "skewness": -1.1718988703299296,
+        "kurtosis": 2.0328084254012824,
+        "unique_count": 113,
+        "zero_count": 0,
+        "negative_count": 0,
+        "positive_count": 114,
+        "outliers_count": 25,
+        "outliers_percentage": 21.929824561403507,
+        "column_type": "numeric"
+      },
+      "total_sales": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 325391882.51982456,
+        "median": 334205462.53499997,
+        "std": 118917789.04911432,
+        "variance": 1.4141440552329654e+16,
+        "min": 36067624.40000001,
+        "max": 839499570.0099998,
+        "range": 803431945.6099998,
+        "q25": 298615496.21750003,
+        "q75": 360371593.395,
+        "iqr": 61756097.17749995,
+        "skewness": 0.758965378106557,
+        "kurtosis": 4.074530556745251,
+        "unique_count": 113,
+        "zero_count": 0,
+        "negative_count": 0,
+        "positive_count": 114,
+        "outliers_count": 23,
+        "outliers_percentage": 20.175438596491226,
+        "column_type": "numeric"
+      },
+      "all_regions": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 2949.221052631579,
+        "median": 2806.0,
+        "std": 1355.4570621602668,
+        "variance": 1837263.8473601413,
+        "min": 458.54999999999995,
+        "max": 6574.15,
+        "range": 6115.599999999999,
+        "q25": 1962.9875,
+        "q75": 3801.0625000000005,
+        "iqr": 1838.0750000000005,
+        "skewness": 0.42792958627062144,
+        "kurtosis": -0.3497242300162653,
+        "unique_count": 114,
+        "zero_count": 0,
+        "negative_count": 0,
+        "positive_count": 114,
+        "outliers_count": 1,
+        "outliers_percentage": 0.8771929824561403,
+        "column_type": "numeric"
+      },
+      "vsits_dynamics": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.2294206214553751,
+        "median": 0.004549810918040964,
+        "std": 1.0889992709150895,
+        "variance": 1.1859194120535967,
+        "min": -0.8873645715179724,
+        "max": 8.041409844604566,
+        "range": 8.928774416122538,
+        "q25": -0.0704807129361881,
+        "q75": 0.05879172207296557,
+        "iqr": 0.12927243500915367,
+        "skewness": 4.182731449267246,
+        "kurtosis": 23.3386702631843,
+        "unique_count": 114,
+        "zero_count": 1,
+        "negative_count": 53,
+        "positive_count": 60,
+        "outliers_count": 41,
+        "outliers_percentage": 35.96491228070175,
+        "column_type": "numeric"
+      },
+      "sales_dynamics": {
+        "data_type": "float64",
+        "count": 114,
+        "non_null_count": 114,
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "mean": 0.2532345555986158,
+        "median": 0.009163982816913996,
+        "std": 1.154137511931284,
+        "variance": 1.3320333964469346,
+        "min": -0.8913623022517861,
+        "max": 8.279121988139586,
+        "range": 9.170484290391371,
+        "q25": -0.07089105962430897,
+        "q75": 0.07284336128204716,
+        "iqr": 0.14373442090635613,
+        "skewness": 3.98772902123653,
+        "kurtosis": 20.936717384569537,
+        "unique_count": 114,
+        "zero_count": 1,
+        "negative_count": 52,
+        "positive_count": 61,
+        "outliers_count": 43,
+        "outliers_percentage": 37.719298245614034,
+        "column_type": "numeric"
+      }
+    },
+    "data_quality": {
+      "completeness_percentage": 100.0,
+      "columns_with_missing_data": 0,
+      "columns_with_missing_percentage": 0.0,
+      "duplicate_rows_percentage": 0.0,
+      "memory_efficiency_mb_per_1k_rows": 0.4967806632058662
+    },
+    "column_types_summary": {
+      "numeric_columns": 57,
+      "categorical_columns": 1,
+      "datetime_columns": 0,
+      "total_columns": 58
+    },
+    "total_missing_values": 0,
+    "overall_completeness_percentage": 100.0
+  },
+  "model_configuration": {
+    "model_name": "ML + SHAP",
+    "range_column": "y&w",
+    "target_variable": "vsits_dynamics",
+    "feature_variables": [
+      "metro_digital_video_sum_of_ad_contacts_with_mobile",
+      "metro_digital_social_sum_of_ad_contacts_with_mobile",
+      "metro_digital_display_sum_of_ad_contacts_with_mobile",
+      "all_regions"
+    ],
+    "feature_count": 4,
+    "range_selection": {}
+  },
+  "model_performance_metrics": {
+    "r_squared": 0.009073243843654155,
+    "adjusted_r_squared": -0.027291040785936582,
+    "mean_absolute_error": 0.6046505322486216,
+    "root_mean_squared_error": 1.0792825678880051,
+    "mean_absolute_percentage_error": null,
+    "observations_used": 114,
+    "features_used": 4,
+    "prediction_accuracy_score": 0.009073243843654155
+  },
+  "cross_validation_results": {
+    "cv_folds": 5,
+    "r2_scores": {
+      "mean": -1.3495743799300886,
+      "std": 2.1234321700817635,
+      "min": -5.572963844556506,
+      "max": -0.08203634926239012,
+      "individual_scores": [
+        -0.12297657948903007,
+        -5.572963844556506,
+        -0.25972717441779847,
+        -0.08203634926239012,
+        -0.7101679519247175
+      ]
+    },
+    "rmse_scores": {
+      "mean": 1.2423021607786902,
+      "std": 0.8645727210440809,
+      "individual_scores": [
+        1.1319690040658859,
+        1.1505372178569382,
+        0.9749910159469319,
+        1.8001867240794551,
+        0.9592725654411086
+      ]
+    },
+    "mae_scores": {
+      "mean": 0.7026037604947447,
+      "std": 0.07892408751751381,
+      "individual_scores": [
+        0.6320895187040155,
+        0.8055059122644529,
+        0.6456088532754,
+        0.7924726354521441,
+        0.6373418827777113
+      ]
+    },
+    "model_stability": {
+      "r2_coefficient_of_variation": -1.573408773654819,
+      "consistent_performance": false
+    }
+  },
+  "variable_importance": {
+    "importance_method": "ML + SHAP_specific_importance",
+    "feature_importance_scores": {
+      "metro_digital_video_sum_of_ad_contacts_with_mobile": {
+        "feature_importance": 0.1090906485915184,
+        "importance_rank": 4,
+        "importance_percentage": 10.9090656042099,
+        "importance_type": "tree_based_importance"
+      },
+      "metro_digital_social_sum_of_ad_contacts_with_mobile": {
+        "feature_importance": 0.20481626689434052,
+        "importance_rank": 3,
+        "importance_percentage": 20.48162817955017,
+        "importance_type": "tree_based_importance"
+      },
+      "metro_digital_display_sum_of_ad_contacts_with_mobile": {
+        "feature_importance": 0.2858251631259918,
+        "importance_rank": 2,
+        "importance_percentage": 28.58251929283142,
+        "importance_type": "tree_based_importance"
+      },
+      "all_regions": {
+        "feature_importance": 0.40026789903640747,
+        "importance_rank": 1,
+        "importance_percentage": 40.026792883872986,
+        "importance_type": "tree_based_importance"
+      }
+    },
+    "top_5_features": [
+      "all_regions",
+      "metro_digital_display_sum_of_ad_contacts_with_mobile",
+      "metro_digital_social_sum_of_ad_contacts_with_mobile",
+      "metro_digital_video_sum_of_ad_contacts_with_mobile"
+    ],
+    "importance_distribution": {
+      "most_important_feature": "all_regions",
+      "feature_count": 4
+    }
+  },
+  "comparative_baseline_analysis": {
+    "baseline_results": {
+      "Linear Regression": {
+        "train_r2": 0.008622233674087432,
+        "test_r2": -0.004858782955293295,
+        "train_adj_r2": -0.0374883601085132,
+        "train_mae": 0.5506552388659239,
+        "test_mae": 0.632498569164032,
+        "train_rmse": 1.081756270327248,
+        "test_rmse": 1.0707835779540362,
+        "r2_difference": 0.013481016629380727,
+        "mae_ratio": 1.1486289869259478,
+        "generalization_score": -0.5635178932688278
+      },
+      "Random Forest": {
+        "train_r2": 0.8454830193807041,
+        "test_r2": -0.09871575413421874,
+        "train_adj_r2": 0.8382961830728299,
+        "train_mae": 0.22476895361475668,
+        "test_mae": 0.6295645348283498,
+        "train_rmse": 0.42706889412445775,
+        "test_rmse": 1.119674690803911,
+        "r2_difference": 0.9441987735149229,
+        "mae_ratio": 2.800940809233795,
+        "generalization_score": -0.1167566371782672
+      },
+      "XGBoost": {
+        "train_r2": 0.9999991626602038,
+        "test_r2": -0.3836379958737002,
+        "train_adj_r2": 0.9999991237141668,
+        "train_mae": 0.0006843098051003522,
+        "test_mae": 0.6787857114369451,
+        "train_rmse": 0.0009941701059530137,
+        "test_rmse": 1.2564940182893205,
+        "r2_difference": 1.383637158533904,
+        "mae_ratio": 991.9274959642045,
+        "generalization_score": -0.38363831710933044
+      }
+    },
+    "best_baseline_model": {
+      "name": "Linear Regression",
+      "performance": {
+        "train_r2": 0.008622233674087432,
+        "test_r2": -0.004858782955293295,
+        "train_adj_r2": -0.0374883601085132,
+        "train_mae": 0.5506552388659239,
+        "test_mae": 0.632498569164032,
+        "train_rmse": 1.081756270327248,
+        "test_rmse": 1.0707835779540362,
+        "r2_difference": 0.013481016629380727,
+        "mae_ratio": 1.1486289869259478,
+        "generalization_score": -0.5635178932688278
+      }
+    },
+    "comparison_summary": {
+      "average_test_r2": -0.16240417765440407,
+      "performance_range": {
+        "best_test_r2": -0.004858782955293295,
+        "worst_test_r2": -0.3836379958737002
+      },
+      "model_comparison_available": true
+    },
+    "current_model_context": "Compare your ML + SHAP results with these baseline models"
+  },
+  "model_diagnostics": {
+    "error": "name 'actual_values' is not defined"
+  },
+  "variance_inflation_factor": {},
+  "residual_diagnostics": {},
+  "overfitting_analysis": {
+    "overfitting_risk": "low",
+    "risk_factors": [],
+    "recommendations": [],
+    "performance_metrics": {
+      "train_r2": 0.00787375454175987,
+      "test_r2": 0.0010342165786134672,
+      "r2_difference": 0.006839537963146403,
+      "mae_ratio": 0.9879975708417823,
+      "generalization_ratio": 0.13134986277871807
+    },
+    "complexity_analysis": {
+      "feature_count": 4,
+      "observation_count": 114,
+      "feature_to_obs_ratio": 0.03508771929824561,
+      "model_complexity": {
+        "model_type": "ML + SHAP",
+        "n_estimators": 200,
+        "max_depth": "unlimited",
+        "features_used": 4,
+        "assessment": "Model complexity within reasonable bounds"
+      }
+    }
+  },
+  "client_specific_analysis": {},
+  "model_predictions": {
+    "predictions_summary": {
+      "prediction_count": 114,
+      "prediction_columns": [
+        "y&w",
+        "prediction"
+      ],
+      "date_coverage": {
+        "start": "2022-12-26T00:00:00",
+        "end": "2025-03-03T00:00:00"
+      }
+    },
+    "predictions_data": [
+      {
+        "y&w": "2022-12-26T00:00:00",
+        "prediction": 0.5246085524559021
+      },
+      {
+        "y&w": "2023-01-02T00:00:00",
+        "prediction": 0.5207822322845459
+      },
+      {
+        "y&w": "2023-01-09T00:00:00",
+        "prediction": 0.5146562457084656
+      },
+      {
+        "y&w": "2023-01-16T00:00:00",
+        "prediction": 0.5044044256210327
+      },
+      {
+        "y&w": "2023-01-23T00:00:00",
+        "prediction": 0.5022494792938232
+      },
+      {
+        "y&w": "2023-01-30T00:00:00",
+        "prediction": 0.49939754605293274
+      },
+      {
+        "y&w": "2023-02-06T00:00:00",
+        "prediction": 0.4941408634185791
+      },
+      {
+        "y&w": "2023-02-13T00:00:00",
+        "prediction": 0.4907817542552948
+      },
+      {
+        "y&w": "2023-02-20T00:00:00",
+        "prediction": 0.48395612835884094
+      },
+      {
+        "y&w": "2023-02-27T00:00:00",
+        "prediction": 0.4758436381816864
+      },
+      {
+        "y&w": "2023-03-06T00:00:00",
+        "prediction": 0.47306615114212036
+      },
+      {
+        "y&w": "2023-03-13T00:00:00",
+        "prediction": 0.4593377113342285
+      },
+      {
+        "y&w": "2023-03-20T00:00:00",
+        "prediction": 0.45374318957328796
+      },
+      {
+        "y&w": "2023-03-27T00:00:00",
+        "prediction": 0.4582809507846832
+      },
+      {
+        "y&w": "2023-04-03T00:00:00",
+        "prediction": 0.45550766587257385
+      },
+      {
+        "y&w": "2023-04-10T00:00:00",
+        "prediction": 0.4530622959136963
+      },
+      {
+        "y&w": "2023-04-17T00:00:00",
+        "prediction": 0.4469505250453949
+      },
+      {
+        "y&w": "2023-04-24T00:00:00",
+        "prediction": 0.4443850815296173
+      },
+      {
+        "y&w": "2023-05-01T00:00:00",
+        "prediction": 0.4394820034503937
+      },
+      {
+        "y&w": "2023-05-08T00:00:00",
+        "prediction": 0.4306766390800476
+      },
+      {
+        "y&w": "2023-05-15T00:00:00",
+        "prediction": 0.42689892649650574
+      },
+      {
+        "y&w": "2023-05-22T00:00:00",
+        "prediction": 0.4225056767463684
+      },
+      {
+        "y&w": "2023-05-29T00:00:00",
+        "prediction": 0.41071996092796326
+      },
+      {
+        "y&w": "2023-06-05T00:00:00",
+        "prediction": 0.41718608140945435
+      },
+      {
+        "y&w": "2023-06-12T00:00:00",
+        "prediction": 0.3968709707260132
+      },
+      {
+        "y&w": "2023-06-19T00:00:00",
+        "prediction": 0.4025885760784149
+      },
+      {
+        "y&w": "2023-06-26T00:00:00",
+        "prediction": 0.4000931978225708
+      },
+      {
+        "y&w": "2023-07-03T00:00:00",
+        "prediction": 0.3978414237499237
+      },
+      {
+        "y&w": "2023-07-10T00:00:00",
+        "prediction": 0.39313486218452454
+      },
+      {
+        "y&w": "2023-07-17T00:00:00",
+        "prediction": 0.3914772868156433
+      },
+      {
+        "y&w": "2023-07-24T00:00:00",
+        "prediction": 0.3784956932067871
+      },
+      {
+        "y&w": "2023-07-31T00:00:00",
+        "prediction": 0.3675142824649811
+      },
+      {
+        "y&w": "2023-08-07T00:00:00",
+        "prediction": 0.36770161986351013
+      },
+      {
+        "y&w": "2023-08-14T00:00:00",
+        "prediction": 0.3592331111431122
+      },
+      {
+        "y&w": "2023-08-21T00:00:00",
+        "prediction": 0.35887232422828674
+      },
+      {
+        "y&w": "2023-08-28T00:00:00",
+        "prediction": 0.3582010269165039
+      },
+      {
+        "y&w": "2023-09-04T00:00:00",
+        "prediction": 0.3543894588947296
+      },
+      {
+        "y&w": "2023-09-11T00:00:00",
+        "prediction": 0.35373932123184204
+      },
+      {
+        "y&w": "2023-09-18T00:00:00",
+        "prediction": 0.33493494987487793
+      },
+      {
+        "y&w": "2023-09-25T00:00:00",
+        "prediction": 0.33155742287635803
+      },
+      {
+        "y&w": "2023-10-02T00:00:00",
+        "prediction": 0.3324053883552551
+      },
+      {
+        "y&w": "2023-10-09T00:00:00",
+        "prediction": 0.32663866877555847
+      },
+      {
+        "y&w": "2023-10-16T00:00:00",
+        "prediction": 0.32162579894065857
+      },
+      {
+        "y&w": "2023-10-23T00:00:00",
+        "prediction": 0.3127882778644562
+      },
+      {
+        "y&w": "2023-10-30T00:00:00",
+        "prediction": 0.31062424182891846
+      },
+      {
+        "y&w": "2023-11-06T00:00:00",
+        "prediction": 0.30735358595848083
+      },
+      {
+        "y&w": "2023-11-13T00:00:00",
+        "prediction": 0.3022545874118805
+      },
+      {
+        "y&w": "2023-11-20T00:00:00",
+        "prediction": 0.3004950284957886
+      },
+      {
+        "y&w": "2023-11-27T00:00:00",
+        "prediction": 0.2912784814834595
+      },
+      {
+        "y&w": "2023-12-04T00:00:00",
+        "prediction": 0.2910645008087158
+      },
+      {
+        "y&w": "2023-12-11T00:00:00",
+        "prediction": 0.28316742181777954
+      },
+      {
+        "y&w": "2023-12-18T00:00:00",
+        "prediction": 0.2774742841720581
+      },
+      {
+        "y&w": "2023-12-25T00:00:00",
+        "prediction": 0.27375495433807373
+      },
+      {
+        "y&w": "2024-01-01T00:00:00",
+        "prediction": 0.26970699429512024
+      },
+      {
+        "y&w": "2024-01-08T00:00:00",
+        "prediction": 0.26138484477996826
+      },
+      {
+        "y&w": "2024-01-15T00:00:00",
+        "prediction": 0.2547077536582947
+      },
+      {
+        "y&w": "2024-01-22T00:00:00",
+        "prediction": 0.252732515335083
+      },
+      {
+        "y&w": "2024-01-29T00:00:00",
+        "prediction": 0.2503195106983185
+      },
+      {
+        "y&w": "2024-02-05T00:00:00",
+        "prediction": 0.24654842913150787
+      },
+      {
+        "y&w": "2024-02-12T00:00:00",
+        "prediction": 0.24462954699993134
+      },
+      {
+        "y&w": "2024-02-19T00:00:00",
+        "prediction": 0.23752138018608093
+      },
+      {
+        "y&w": "2024-02-26T00:00:00",
+        "prediction": 0.225670725107193
+      },
+      {
+        "y&w": "2024-03-04T00:00:00",
+        "prediction": 0.22504402697086334
+      },
+      {
+        "y&w": "2024-03-11T00:00:00",
+        "prediction": 0.219166561961174
+      },
+      {
+        "y&w": "2024-03-18T00:00:00",
+        "prediction": 0.22679004073143005
+      },
+      {
+        "y&w": "2024-03-25T00:00:00",
+        "prediction": 0.21163959801197052
+      },
+      {
+        "y&w": "2024-04-01T00:00:00",
+        "prediction": 0.21036593616008759
+      },
+      {
+        "y&w": "2024-04-08T00:00:00",
+        "prediction": 0.2100839763879776
+      },
+      {
+        "y&w": "2024-04-15T00:00:00",
+        "prediction": 0.19853396713733673
+      },
+      {
+        "y&w": "2024-04-22T00:00:00",
+        "prediction": 0.198653906583786
+      },
+      {
+        "y&w": "2024-04-29T00:00:00",
+        "prediction": 0.19316741824150085
+      },
+      {
+        "y&w": "2024-05-06T00:00:00",
+        "prediction": 0.18404649198055267
+      },
+      {
+        "y&w": "2024-05-13T00:00:00",
+        "prediction": 0.17944274842739105
+      },
+      {
+        "y&w": "2024-05-20T00:00:00",
+        "prediction": 0.1759927123785019
+      },
+      {
+        "y&w": "2024-05-27T00:00:00",
+        "prediction": 0.1701468527317047
+      },
+      {
+        "y&w": "2024-06-03T00:00:00",
+        "prediction": 0.16377951204776764
+      },
+      {
+        "y&w": "2024-06-10T00:00:00",
+        "prediction": 0.15777041018009186
+      },
+      {
+        "y&w": "2024-06-17T00:00:00",
+        "prediction": 0.1524757444858551
+      },
+      {
+        "y&w": "2024-06-24T00:00:00",
+        "prediction": 0.14593353867530823
+      },
+      {
+        "y&w": "2024-07-01T00:00:00",
+        "prediction": 0.13923026621341705
+      },
+      {
+        "y&w": "2024-07-08T00:00:00",
+        "prediction": 0.14007724821567535
+      },
+      {
+        "y&w": "2024-07-15T00:00:00",
+        "prediction": 0.13734962046146393
+      },
+      {
+        "y&w": "2024-07-22T00:00:00",
+        "prediction": 0.13245579600334167
+      },
+      {
+        "y&w": "2024-07-29T00:00:00",
+        "prediction": 0.12568940222263336
+      },
+      {
+        "y&w": "2024-08-05T00:00:00",
+        "prediction": 0.1214509829878807
+      },
+      {
+        "y&w": "2024-08-12T00:00:00",
+        "prediction": 0.12035796046257019
+      },
+      {
+        "y&w": "2024-08-19T00:00:00",
+        "prediction": 0.12423011660575867
+      },
+      {
+        "y&w": "2024-08-26T00:00:00",
+        "prediction": 0.10071904957294464
+      },
+      {
+        "y&w": "2024-09-02T00:00:00",
+        "prediction": 0.10387056320905685
+      },
+      {
+        "y&w": "2024-09-09T00:00:00",
+        "prediction": 0.10047312080860138
+      },
+      {
+        "y&w": "2024-09-16T00:00:00",
+        "prediction": 0.09218529611825943
+      },
+      {
+        "y&w": "2024-09-23T00:00:00",
+        "prediction": 0.08781877160072327
+      },
+      {
+        "y&w": "2024-09-30T00:00:00",
+        "prediction": 0.08292912691831589
+      },
+      {
+        "y&w": "2024-10-07T00:00:00",
+        "prediction": 0.08075787872076035
+      },
+      {
+        "y&w": "2024-10-14T00:00:00",
+        "prediction": 0.07158707082271576
+      },
+      {
+        "y&w": "2024-10-21T00:00:00",
+        "prediction": 0.07393725216388702
+      },
+      {
+        "y&w": "2024-10-28T00:00:00",
+        "prediction": 0.06242132931947708
+      },
+      {
+        "y&w": "2024-11-04T00:00:00",
+        "prediction": 0.06033645197749138
+      },
+      {
+        "y&w": "2024-11-11T00:00:00",
+        "prediction": 0.05472298339009285
+      },
+      {
+        "y&w": "2024-11-18T00:00:00",
+        "prediction": 0.04775018244981766
+      },
+      {
+        "y&w": "2024-11-25T00:00:00",
+        "prediction": 0.0492338091135025
+      },
+      {
+        "y&w": "2024-12-02T00:00:00",
+        "prediction": 0.049186624586582184
+      },
+      {
+        "y&w": "2024-12-09T00:00:00",
+        "prediction": 0.034737054258584976
+      },
+      {
+        "y&w": "2024-12-16T00:00:00",
+        "prediction": 0.02957558073103428
+      },
+      {
+        "y&w": "2024-12-23T00:00:00",
+        "prediction": 0.027216991409659386
+      },
+      {
+        "y&w": "2025-01-06T00:00:00",
+        "prediction": 0.022100210189819336
+      },
+      {
+        "y&w": "2025-01-13T00:00:00",
+        "prediction": 0.014597129076719284
+      },
+      {
+        "y&w": "2025-01-20T00:00:00",
+        "prediction": 0.009295702911913395
+      },
+      {
+        "y&w": "2025-01-27T00:00:00",
+        "prediction": 0.006876111496239901
+      },
+      {
+        "y&w": "2025-02-03T00:00:00",
+        "prediction": -0.003187681781128049
+      },
+      {
+        "y&w": "2025-02-10T00:00:00",
+        "prediction": -0.0008362894295714796
+      },
+      {
+        "y&w": "2025-02-17T00:00:00",
+        "prediction": -0.008797122165560722
+      },
+      {
+        "y&w": "2025-02-24T00:00:00",
+        "prediction": -0.004201068542897701
+      },
+      {
+        "y&w": "2025-03-03T00:00:00",
+        "prediction": -0.018511496484279633
+      }
+    ]
+  },
+  "channel_contributions": {},
+  "multicollinearity_integration": {
+    "analysis_type": "basic_multicollinearity_check",
+    "note": "For comprehensive analysis, use the multicollinearity analysis module",
+    "correlation_analysis": {
+      "high_correlations_found": 0,
+      "threshold_used": 0.8,
+      "high_correlation_pairs": [],
+      "correlation_matrix_available": true
+    },
+    "vif_analysis": {
+      "vif_results": [
+        {
+          "variable": "metro_digital_video_sum_of_ad_contacts_with_mobile",
+          "vif": 1.0701462336564487,
+          "high_multicollinearity": false
+        },
+        {
+          "variable": "metro_digital_social_sum_of_ad_contacts_with_mobile",
+          "vif": 1.0134011108592278,
+          "high_multicollinearity": false
+        },
+        {
+          "variable": "metro_digital_display_sum_of_ad_contacts_with_mobile",
+          "vif": 1.1192230910380667,
+          "high_multicollinearity": false
+        },
+        {
+          "variable": "all_regions",
+          "vif": 1.0619025060010987,
+          "high_multicollinearity": false
+        }
+      ],
+      "high_vif_count": 0,
+      "vif_threshold": 10.0
+    },
+    "recommendations": [
+      "No major multicollinearity issues detected in basic analysis"
+    ],
+    "comprehensive_analysis_suggestion": "Run dedicated multicollinearity analysis for detailed recommendations"
+  },
+  "interpretation_hints": [
+    "Lower RMSE indicates better predictive accuracy",
+    "Higher SHAP value indicates a channel's contribution",
+    "Feature importance ranks show relative predictive power",
+    "SHAP values explain individual prediction contributions"
+  ],
+  "multicollinearity_analysis_complete": true,
+  "analysis_timestamp": "2025-08-04T12:43:03.233677",
+  "current_model_analysis": {
+    "model_name": "ML + SHAP",
+    "model_object_type": "XGBRegressor",
+    "features_used": [
+      "metro_digital_video_sum_of_ad_contacts_with_mobile",
+      "metro_digital_social_sum_of_ad_contacts_with_mobile",
+      "metro_digital_display_sum_of_ad_contacts_with_mobile",
+      "all_regions"
+    ],
+    "target_variable": "vsits_dynamics"
+  },
+  "correlation_analysis_detailed": {
+    "high_correlation_pairs_count": 0,
+    "high_correlation_pairs": [],
+    "correlation_matrix_summary": {
+      "mean_absolute_correlation": 0.2753303854258631,
+      "max_correlation": 1.0
+    }
+  },
+  "vif_analysis_detailed": {
+    "high_vif_variables_count": 0,
+    "vif_results": [
+      {
+        "Variable": "metro_digital_display_sum_of_ad_contacts_with_mobile",
+        "VIF": 1.1192230910380667,
+        "High_Multicollinearity": false
+      },
+      {
+        "Variable": "metro_digital_video_sum_of_ad_contacts_with_mobile",
+        "VIF": 1.0701462336564482,
+        "High_Multicollinearity": false
+      },
+      {
+        "Variable": "all_regions",
+        "VIF": 1.0619025060010987,
+        "High_Multicollinearity": false
+      },
+      {
+        "Variable": "metro_digital_social_sum_of_ad_contacts_with_mobile",
+        "VIF": 1.0134011108592278,
+        "High_Multicollinearity": false
+      }
+    ],
+    "mean_vif": 1.0661682353887103,
+    "max_vif": 1.1192230910380667
+  },
+  "variable_reduction_recommendations": {
+    "original_feature_count": 5,
+    "suggested_removals": [],
+    "reduced_feature_set": [
+      "metro_digital_display_sum_of_ad_contacts_with_mobile",
+      "all_regions",
+      "metro_digital_social_sum_of_ad_contacts_with_mobile",
+      "metro_digital_video_sum_of_ad_contacts_with_mobile",
+      "vsits_dynamics"
+    ],
+    "reduced_feature_count": 5,
+    "reduction_percentage": 0.0,
+    "high_correlation_removals": [],
+    "high_vif_removals": [],
+    "removal_reasons": {}
+  },
+  "baseline_model_comparison": {
+    "baseline_results": {
+      "Linear Regression": {
+        "train_r2": 0.008622233674087543,
+        "test_r2": -0.004858782955898366,
+        "train_adj_r2": -0.037488360108512975,
+        "train_mae": 0.5506552388660048,
+        "test_mae": 0.6324985691637031,
+        "train_rmse": 1.081756270327248,
+        "test_rmse": 1.0707835779543586,
+        "r2_difference": 0.013481016629985909,
+        "mae_ratio": 1.1486289869251818,
+        "feature_count": 4
+      },
+      "XGBoost": {
+        "train_r2": 0.9999991626602038,
+        "test_r2": -0.24379350317223913,
+        "train_adj_r2": 0.9999991237141668,
+        "train_mae": 0.000684309805100346,
+        "test_mae": 0.6614140468921257,
+        "train_rmse": 0.0009941701059530106,
+        "test_rmse": 1.1913059958902432,
+        "r2_difference": 1.243792665832443,
+        "mae_ratio": 966.541823546043,
+        "feature_count": 4
+      },
+      "Random Forest": {
+        "train_r2": 0.8438638583980209,
+        "test_r2": -0.09489125581337388,
+        "train_adj_r2": 0.8366017122769986,
+        "train_mae": 0.2247938178804249,
+        "test_mae": 0.6236637836478415,
+        "train_rmse": 0.42930065921165717,
+        "test_rmse": 1.117724265086428,
+        "r2_difference": 0.9387551142113948,
+        "mae_ratio": 2.7743813843652427,
+        "feature_count": 4
+      }
+    },
+    "comparison_with_current_model": {
+      "current_model_metrics": {
+        "current_model_r2": 0.009073243843654155,
+        "current_model_mae": 0.6046505322486216,
+        "current_model_rmse": 1.0792825678880051
+      },
+      "baseline_comparison": {
+        "better_than_count": 3,
+        "total_baselines": 3,
+        "better_than_percentage": 100.0,
+        "baseline_r2_values": {
+          "Linear Regression": -0.004858782955898366,
+          "XGBoost": -0.24379350317223913,
+          "Random Forest": -0.09489125581337388
+        }
+      },
+      "performance_ranking": "Best performing model"
+    },
+    "performance_summary": {
+      "mean_test_r2": -0.11451451398050379,
+      "std_test_r2": 0.0985266607811836,
+      "mean_r2_difference": 0.7320095988912746,
+      "models_count": 3
+    }
+  },
+  "overfitting_analysis_detailed": {
+    "overfitting_alerts": [
+      {
+        "model": "XGBoost",
+        "alerts": [
+          {
+            "type": "high_r2_difference",
+            "message": "R² difference (1.244) exceeds threshold (0.1)",
+            "severity": "high"
+          },
+          {
+            "type": "high_mae_ratio",
+            "message": "Test MAE is 966.54x higher than train MAE (threshold: 1.3)",
+            "severity": "high"
+          },
+          {
+            "type": "suspiciously_high_train_performance",
+            "message": "Very high train R² (1.000) with much lower test R² (-0.244)",
+            "severity": "high"
+          }
+        ],
+        "train_r2": 0.9999991626602038,
+        "test_r2": -0.24379350317223913,
+        "r2_difference": 1.243792665832443,
+        "mae_ratio": 966.541823546043
+      },
+      {
+        "model": "Random Forest",
+        "alerts": [
+          {
+            "type": "high_r2_difference",
+            "message": "R² difference (0.939) exceeds threshold (0.1)",
+            "severity": "high"
+          },
+          {
+            "type": "high_mae_ratio",
+            "message": "Test MAE is 2.77x higher than train MAE (threshold: 1.3)",
+            "severity": "high"
+          }
+        ],
+        "train_r2": 0.8438638583980209,
+        "test_r2": -0.09489125581337388,
+        "r2_difference": 0.9387551142113948,
+        "mae_ratio": 2.7743813843652427
+      }
+    ],
+    "overall_risk": "high",
+    "risk_factors": [
+      {
+        "model": "XGBoost",
+        "risk_type": "high_r2_difference",
+        "severity": "high",
+        "message": "R² difference (1.244) exceeds threshold (0.1)"
+      },
+      {
+        "model": "XGBoost",
+        "risk_type": "high_mae_ratio",
+        "severity": "high",
+        "message": "Test MAE is 966.54x higher than train MAE (threshold: 1.3)"
+      },
+      {
+        "model": "XGBoost",
+        "risk_type": "suspiciously_high_train_performance",
+        "severity": "high",
+        "message": "Very high train R² (1.000) with much lower test R² (-0.244)"
+      },
+      {
+        "model": "Random Forest",
+        "risk_type": "high_r2_difference",
+        "severity": "high",
+        "message": "R² difference (0.939) exceeds threshold (0.1)"
+      },
+      {
+        "model": "Random Forest",
+        "risk_type": "high_mae_ratio",
+        "severity": "high",
+        "message": "Test MAE is 2.77x higher than train MAE (threshold: 1.3)"
+      }
+    ]
+  },
+  "multicollinearity_severity": {
+    "high_correlation_pairs": 0,
+    "high_vif_variables": 0,
+    "reduction_needed": 0,
+    "severity_level": "low"
+  },
+  "actionable_recommendations": [
+    "Consider feature engineering or additional data collection - current predictive power is low",
+    "High overfitting risk detected - consider regularization, cross-validation, or more data"
+  ],
+  "feature_optimization": {
+    "original_features": 4,
+    "recommended_features": 5,
+    "features_to_remove": [],
+    "optimized_feature_set": [
+      "metro_digital_display_sum_of_ad_contacts_with_mobile",
+      "all_regions",
+      "metro_digital_social_sum_of_ad_contacts_with_mobile",
+      "metro_digital_video_sum_of_ad_contacts_with_mobile",
+      "vsits_dynamics"
+    ],
+    "reduction_impact": {
+      "percentage_reduction": 0.0,
+      "expected_performance_impact": "Likely improvement in model stability and generalization"
+    }
+  },
+  "comprehensive_model_metrics": {
+    "baseline_models_performance": {
+      "Linear Regression": {
+        "train_r2": 0.008622233674087543,
+        "test_r2": -0.004858782955898366,
+        "train_adj_r2": -0.037488360108512975,
+        "train_mae": 0.5506552388660048,
+        "test_mae": 0.6324985691637031,
+        "train_rmse": 1.081756270327248,
+        "test_rmse": 1.0707835779543586,
+        "r2_difference": 0.013481016629985909,
+        "mae_ratio": 1.1486289869251818,
+        "feature_count": 4
+      },
+      "XGBoost": {
+        "train_r2": 0.9999991626602038,
+        "test_r2": -0.24379350317223913,
+        "train_adj_r2": 0.9999991237141668,
+        "train_mae": 0.000684309805100346,
+        "test_mae": 0.6614140468921257,
+        "train_rmse": 0.0009941701059530106,
+        "test_rmse": 1.1913059958902432,
+        "r2_difference": 1.243792665832443,
+        "mae_ratio": 966.541823546043,
+        "feature_count": 4
+      },
+      "Random Forest": {
+        "train_r2": 0.8438638583980209,
+        "test_r2": -0.09489125581337388,
+        "train_adj_r2": 0.8366017122769986,
+        "train_mae": 0.2247938178804249,
+        "test_mae": 0.6236637836478415,
+        "train_rmse": 0.42930065921165717,
+        "test_rmse": 1.117724265086428,
+        "r2_difference": 0.9387551142113948,
+        "mae_ratio": 2.7743813843652427,
+        "feature_count": 4
+      }
+    },
+    "current_model_type": "ML + SHAP",
+    "analysis_scope": "comprehensive_multicollinearity_and_performance",
+    "current_model_detailed": {
+      "r_squared": 0.009073243843654155,
+      "mean_absolute_error": 0.6046505322486216,
+      "root_mean_squared_error": 1.0792825678880051,
+      "observations_used": 114,
+      "features_used": 4
+    },
+    "performance_benchmarks": {
+      "best_baseline_r2": -0.004858782955898366,
+      "worst_baseline_r2": -0.24379350317223913,
+      "average_baseline_r2": -0.11451451398050379,
+      "best_baseline_mae": 0.6236637836478415,
+      "worst_baseline_mae": 0.6614140468921257,
+      "average_baseline_mae": 0.6391921332345567,
+      "model_count": 3
+    }
+  }
+}

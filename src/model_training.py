@@ -1147,7 +1147,7 @@ def train_causal_impact(
         
         # Create full predictions DataFrame
         predictions = pd.DataFrame({
-            date_col: df[date_col],
+            "date": df[date_col],
             "actual": df[target],
             "prediction": np.concatenate([
                 pre_period_data[target].values,  # Use actual values for pre-period

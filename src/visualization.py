@@ -826,7 +826,7 @@ def display_ml_shap_metrics(model: Any, df: pd.DataFrame, target: str) -> None:
         target: Target variable name
     """
     try:
-        st.subheader("Model Diagnostics (ML + SHAP)")
+        st.subheader("✨ Machine Learning + SHAP Analysis")
         
         # Get feature columns (use stored feature names if available)
         if hasattr(model, 'feature_names_'):
@@ -872,7 +872,44 @@ def display_ml_shap_metrics(model: Any, df: pd.DataFrame, target: str) -> None:
         rmse = mean_squared_error(df[target], preds, squared=False)
         mae = mean_absolute_error(df[target], preds)
         
-        st.markdown(f"**RMSE / MAE:** {rmse:.2f} / {mae:.2f}")
+        # Model Performance Metrics
+        st.markdown("### 📊 Model Performance Metrics")
+        
+        # Calculate additional metrics
+        from sklearn.metrics import r2_score
+        r2 = r2_score(df[target], preds)
+        
+        # Calculate relative metrics
+        baseline_mean = df[target].mean()
+        relative_rmse = rmse / baseline_mean if baseline_mean != 0 else None
+        
+        # Display metrics in columns
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("RMSE", f"{rmse:.4f}")
+        with col2:
+            st.metric("MAE", f"{mae:.4f}")
+        with col3:
+            st.metric("R² Score", f"{r2:.4f}")
+        with col4:
+            st.metric("Relative RMSE", f"{relative_rmse:.3f}" if relative_rmse is not None else "N/A")
+        
+        # Model quality assessment
+        if r2 > 0.9:
+            quality = "Excellent"
+            quality_color = "🟢"
+        elif r2 > 0.8:
+            quality = "Good"
+            quality_color = "🟡"
+        elif r2 > 0.6:
+            quality = "Fair"
+            quality_color = "🟠"
+        else:
+            quality = "Poor"
+            quality_color = "🔴"
+        
+        st.markdown(f"**{quality_color} Model Quality: {quality}** (R² = {r2:.4f})")
 
         # Global SHAP summary (bar plot)
         try:
@@ -881,7 +918,8 @@ def display_ml_shap_metrics(model: Any, df: pd.DataFrame, target: str) -> None:
             shap_values = explainer(X_pred)
             
             # Create interactive SHAP summary plot with Plotly
-            st.markdown("**SHAP Feature Importance (Interactive):**")
+            st.markdown("### 🔍 SHAP Feature Importance Analysis")
+            st.info("📊 SHAP values explain individual predictions by quantifying each feature's contribution.")
             
             # Calculate mean absolute SHAP values for feature importance
             shap_importance = np.abs(shap_values.values).mean(axis=0)
@@ -905,7 +943,8 @@ def display_ml_shap_metrics(model: Any, df: pd.DataFrame, target: str) -> None:
             st.plotly_chart(fig_shap, use_container_width=True)
             
             # SHAP Waterfall Chart for first observation
-            st.markdown("**💧 SHAP Waterfall Chart (Sample Prediction):**")
+            st.markdown("### 💧 SHAP Waterfall Analysis")
+            st.info("🔍 Shows how each feature contributes to a specific prediction, starting from the baseline.")
             
             # Select a representative sample (middle of dataset)
             sample_idx = len(shap_values.values) // 2
@@ -972,7 +1011,8 @@ def display_ml_shap_metrics(model: Any, df: pd.DataFrame, target: str) -> None:
             st.plotly_chart(fig_waterfall, use_container_width=True)
             
             # Additional Feature Impact Analysis
-            st.markdown("**Feature Impact Distribution:**")
+            st.markdown("### 📈 Feature Impact Distribution")
+            st.info("📆 Distribution of SHAP values across all observations shows feature behavior patterns.")
             
             # Create box plot showing SHAP value distributions
             shap_df_long = pd.DataFrame(shap_values.values, columns=feature_cols)
@@ -1005,10 +1045,36 @@ def display_ml_shap_metrics(model: Any, df: pd.DataFrame, target: str) -> None:
                 if hasattr(model, 'categorical_cols_'):
                     st.write(f"- Categorical columns: {model.categorical_cols_}")
         
+        # Add business interpretation section before KPI dashboard
+        st.markdown("### 💼 Business Interpretation & Conclusions")
+        
+        interpretation = create_ml_shap_interpretation(
+            r2, rmse, mae, quality,
+            shap_importance if 'shap_importance' in locals() else None,
+            feature_cols
+        )
+        
+        # Display interpretation with appropriate styling
+        if quality in ["Excellent", "Good"]:
+            st.success(interpretation["summary"])
+        elif quality == "Fair":
+            st.warning(interpretation["summary"])
+        else:
+            st.error(interpretation["summary"])
+        
+        st.info(interpretation["details"])
+        
+        # Recommendations
+        st.markdown("### 🎯 Recommendations")
+        for rec in interpretation["recommendations"]:
+            st.markdown(f"• {rec}")
+        
         # KPI Dashboard Section
-        create_kpi_dashboard(df, target, feature_cols, preds, {'rmse': rmse, 'mae': mae}, shap_importance if 'shap_importance' in locals() else None)
+        st.markdown("### 📊 Model Performance Dashboard")
+        create_kpi_dashboard(df, target, feature_cols, preds, {'rmse': rmse, 'mae': mae, 'r2': r2}, shap_importance if 'shap_importance' in locals() else None)
         
         # Create actual vs predicted comparison chart
+        st.markdown("### 📈 Actual vs Predicted Comparison")
         try:
             predictions_data = pd.DataFrame({
                 'prediction': preds
@@ -1059,7 +1125,7 @@ def display_ml_shap_metrics(model: Any, df: pd.DataFrame, target: str) -> None:
             st.warning(f"Could not create actual vs predicted chart: {str(chart_error)}")
             st.info("This may be due to date column detection issues or data format problems.")
         
-        logger.info("ML + SHAP metrics displayed successfully")
+        logger.info("Enhanced ML + SHAP metrics displayed successfully")
         
     except Exception as e:
         logger.error(f"Error displaying ML + SHAP metrics: {str(e)}")
@@ -1078,79 +1144,686 @@ def display_ml_shap_metrics(model: Any, df: pd.DataFrame, target: str) -> None:
             st.info("Try retraining the model or check your data for inconsistencies.")
 
 
-def display_did_metrics(model: Any) -> None:
+def create_ml_shap_interpretation(r2: float, rmse: float, mae: float, quality: str,
+                                shap_importance: np.ndarray = None, feature_names: List[str] = None) -> Dict[str, any]:
     """
-    Display DiD model diagnostics and metrics.
+    Create business interpretation for ML + SHAP results.
     
     Args:
-        model: Trained DiD model
+        r2: R-squared score
+        rmse: Root Mean Squared Error
+        mae: Mean Absolute Error
+        quality: Model quality assessment (Excellent/Good/Fair/Poor)
+        shap_importance: SHAP feature importance values
+        feature_names: List of feature names
+        
+    Returns:
+        Dictionary with summary, details, and recommendations
+    """
+    
+    # Create summary based on model quality
+    if quality == "Excellent":
+        summary = f"Machine Learning model demonstrates excellent predictive performance (R² = {r2:.4f}). The model accurately captures complex patterns with low prediction errors (RMSE: {rmse:.4f}, MAE: {mae:.4f})."
+    elif quality == "Good":
+        summary = f"Machine Learning model shows good predictive performance (R² = {r2:.4f}). The model captures most patterns effectively with reasonable prediction accuracy (RMSE: {rmse:.4f}, MAE: {mae:.4f})."
+    elif quality == "Fair":
+        summary = f"Machine Learning model provides fair predictive performance (R² = {r2:.4f}). There is room for improvement in capturing data patterns (RMSE: {rmse:.4f}, MAE: {mae:.4f})."
+    else:
+        summary = f"Machine Learning model shows poor predictive performance (R² = {r2:.4f}). Significant improvements needed for reliable predictions (RMSE: {rmse:.4f}, MAE: {mae:.4f})."
+    
+    # Create detailed explanation
+    details = f"""
+    **Machine Learning + SHAP Analysis:**
+    • Advanced ML model (likely Gradient Boosting) with explainable AI capabilities
+    • R² of {r2:.4f} indicates the model explains {r2*100:.1f}% of the variance in the target variable
+    • SHAP (SHapley Additive exPlanations) provides local and global feature importance
+    • Each prediction is decomposed into feature contributions, enabling transparency
+    
+    **Model Performance:**
+    • RMSE: {rmse:.4f} (average prediction error magnitude)
+    • MAE: {mae:.4f} (average absolute prediction error)
+    • Model complexity allows capturing non-linear relationships and feature interactions
+    • {'Excellent' if quality == 'Excellent' else 'Good' if quality == 'Good' else 'Moderate' if quality == 'Fair' else 'Poor'} balance between model accuracy and explainability
+    
+    **Feature Importance Insights:**
+    • SHAP values provide both magnitude and direction of feature impacts
+    • {'Feature importance analysis available' if shap_importance is not None else 'Feature importance analysis not available'}
+    • {'Waterfall charts show individual prediction breakdowns' if shap_importance is not None else 'Consider running SHAP analysis for detailed insights'}
+    • Feature impact distributions reveal consistency across different observations
+    """
+    
+    # Create recommendations
+    recommendations = []
+    
+    if quality in ["Excellent", "Good"]:
+        recommendations.extend([
+            "Model performance is strong - suitable for production deployment",
+            "Use SHAP insights to understand key business drivers and feature relationships",
+            "Leverage individual prediction explanations for stakeholder communication",
+            "Monitor model performance over time and retrain with new data as needed"
+        ])
+        
+        if shap_importance is not None and feature_names is not None:
+            # Find top features
+            top_features = [feature_names[i] for i in np.argsort(shap_importance)[-3:]]
+            recommendations.append(f"Focus on top driving features: {', '.join(reversed(top_features))}")
+            
+    elif quality == "Fair":
+        recommendations.extend([
+            "⚠️ Model performance is acceptable but has room for improvement",
+            "Consider feature engineering to capture additional patterns",
+            "Explore hyperparameter tuning or alternative ML algorithms",
+            "Use SHAP analysis to identify underperforming or redundant features"
+        ])
+    else:
+        recommendations.extend([
+            "⚠️ Model performance needs significant improvement before production use",
+            "Review data quality and feature selection process",
+            "Consider data preprocessing improvements (outlier handling, feature scaling)",
+            "Evaluate if the problem is suitable for the current ML approach"
+        ])
+    
+    # SHAP-specific recommendations
+    if shap_importance is not None:
+        recommendations.extend([
+            "Use SHAP feature importance to guide feature selection and engineering",
+            "Analyze SHAP interaction values to understand feature relationships",
+            "Create SHAP-based business rules for decision support",
+            "Use waterfall plots to explain individual high-impact predictions"
+        ])
+    else:
+        recommendations.append("⚠️ Generate SHAP analysis for better model interpretability and insights")
+    
+    # Technical recommendations
+    recommendations.extend([
+        "Implement cross-validation to assess model generalization",
+        "Monitor for data drift in production to detect when retraining is needed",
+        "Consider ensemble methods to improve robustness",
+        "Validate model assumptions and check for bias in predictions"
+    ])
+    
+    # Business value recommendations
+    if quality in ["Excellent", "Good"]:
+        recommendations.extend([
+            "Integrate model predictions into business decision-making processes",
+            "Create automated alerts for predictions exceeding certain thresholds",
+            "Develop A/B testing framework to measure business impact"
+        ])
+    
+    return {
+        "summary": summary,
+        "details": details,
+        "recommendations": recommendations
+    }
+
+
+def display_did_metrics(model: Any) -> None:
+    """
+    Display comprehensive DiD model diagnostics and metrics.
+    
+    Args:
+        model: Trained DiD model (statsmodels OLS result)
     """
     try:
-        st.subheader("Model Diagnostics (DiD)")
+        st.subheader("✨ Difference-in-Differences Analysis")
         
+        # Model Summary Section (like OLS output)
+        st.markdown("**Model Summary:**")
+        st.text(str(model.summary()))
+        
+        # Key DiD Results Section
+        st.markdown("### 🎯 Treatment Effect Results")
+        
+        # Extract key statistics
         ate = model.params.get("treated:post", float("nan"))
         ci_low, ci_high = model.conf_int().loc["treated:post"]
         pval = model.pvalues.get("treated:post", float("nan"))
+        std_err = model.bse.get("treated:post", float("nan"))
+        t_stat = model.tvalues.get("treated:post", float("nan"))
         
-        significance = " Significant" if pval < SIGNIFICANCE_LEVEL else " Not significant"
-        st.markdown(
-            f"**ATE:** {ate:.3f}  |  CI95%: [{ci_low:.3f}, {ci_high:.3f}]  |  p-value: {pval:.3g} ({significance})"
+        # Display key metrics in columns
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Average Treatment Effect", f"{ate:.4f}")
+        with col2:
+            r_squared = model.rsquared if hasattr(model, 'rsquared') else None
+            st.metric("R-squared", f"{r_squared:.4f}" if r_squared is not None else "N/A")
+        with col3:
+            adj_r_squared = model.rsquared_adj if hasattr(model, 'rsquared_adj') else None
+            st.metric("Adj R-squared", f"{adj_r_squared:.4f}" if adj_r_squared is not None else "N/A")
+        with col4:
+            f_stat = model.fvalue if hasattr(model, 'fvalue') else None
+            st.metric("F-statistic", f"{f_stat:.2f}" if f_stat is not None else "N/A")
+        
+        # Coefficient table with color-coded significance
+        st.markdown("### 📊 Coefficient Analysis")
+        coef_tbl = model.summary2().tables[1].rename(columns={"Coef.": "Coef"})
+        coef_tbl["Signif"] = coef_tbl["P>|t|"].apply(
+            lambda p: "***" if p < 0.001 else "**" if p < 0.01 else "*" if p < 0.05 else "ns"
         )
         
-        logger.info("DiD metrics displayed successfully")
+        # Color-code significance
+        styled_coef = coef_tbl.style.applymap(
+            lambda p: "color:green; font-weight:bold;" if p < SIGNIFICANCE_LEVEL else "color:red;", 
+            subset=["P>|t|"]
+        )
+        st.dataframe(styled_coef, use_container_width=True)
+        
+        # Treatment Effect Detail
+        st.markdown("### 🔍 Treatment Effect Details")
+        
+        # Significance indicator with color
+        is_significant = pval < SIGNIFICANCE_LEVEL
+        significance_color = "🟢" if is_significant else "🔴"
+        significance_text = "Statistically Significant" if is_significant else "Not Statistically Significant"
+        
+        effect_direction = "Positive" if ate > 0 else "Negative" if ate < 0 else "No"
+        effect_color = "📈" if ate > 0 else "📉" if ate < 0 else "➡️"
+        
+        st.markdown(f"**{significance_color} {significance_text}** (p = {pval:.4f})")
+        st.markdown(f"**{effect_color} {effect_direction} Treatment Effect:** {ate:.4f}")
+        st.markdown(f"**📏 Standard Error:** {std_err:.4f}")
+        st.markdown(f"**📊 t-statistic:** {t_stat:.4f}")
+        st.markdown(f"**🎯 95% Confidence Interval:** [{ci_low:.4f}, {ci_high:.4f}]")
+        
+        # Model Diagnostics
+        st.markdown("### 🔬 Model Diagnostics")
+        
+        diag_col1, diag_col2, diag_col3 = st.columns(3)
+        
+        with diag_col1:
+            n_obs = model.nobs if hasattr(model, 'nobs') else None
+            st.metric("Observations", f"{int(n_obs)}" if n_obs is not None else "N/A")
+            
+        with diag_col2:
+            aic = model.aic if hasattr(model, 'aic') else None
+            st.metric("AIC", f"{aic:.2f}" if aic is not None else "N/A")
+            
+        with diag_col3:
+            bic = model.bic if hasattr(model, 'bic') else None
+            st.metric("BIC", f"{bic:.2f}" if bic is not None else "N/A")
+        
+        # Business Interpretation
+        st.markdown("### 💼 Business Interpretation & Conclusions")
+        
+        interpretation = create_did_interpretation(ate, pval, ci_low, ci_high, is_significant)
+        
+        # Display interpretation with appropriate styling
+        if is_significant:
+            st.success(interpretation["summary"])
+        else:
+            st.warning(interpretation["summary"])
+        
+        st.info(interpretation["details"])
+        
+        # Recommendations
+        st.markdown("### 🎯 Recommendations")
+        for rec in interpretation["recommendations"]:
+            st.markdown(f"• {rec}")
+        
+        logger.info("Enhanced DiD metrics displayed successfully")
         
     except Exception as e:
         logger.error(f"Error displaying DiD metrics: {str(e)}")
         st.error(f"Error computing DiD metrics: {str(e)}")
 
 
+def create_did_interpretation(ate: float, pval: float, ci_low: float, ci_high: float, is_significant: bool) -> Dict[str, any]:
+    """
+    Create business interpretation for DiD results.
+    
+    Args:
+        ate: Average Treatment Effect
+        pval: P-value for the treatment effect
+        ci_low: Lower bound of confidence interval
+        ci_high: Upper bound of confidence interval
+        is_significant: Whether the effect is statistically significant
+        
+    Returns:
+        Dictionary with summary, details, and recommendations
+    """
+    
+    # Determine effect size interpretation
+    abs_ate = abs(ate)
+    if abs_ate < 0.01:
+        effect_size = "negligible"
+    elif abs_ate < 0.05:
+        effect_size = "small"
+    elif abs_ate < 0.1:
+        effect_size = "moderate"
+    else:
+        effect_size = "large"
+    
+    # Create summary
+    if is_significant:
+        direction = "increased" if ate > 0 else "decreased"
+        summary = f"The intervention had a statistically significant {direction} effect of {ate:.4f} units (p = {pval:.4f}). Effect size is {effect_size}."
+    else:
+        summary = f"No statistically significant treatment effect detected (p = {pval:.4f}). The intervention does not appear to have a meaningful impact."
+    
+    # Create detailed explanation
+    details = f"""
+    **Statistical Interpretation:**
+    • The Average Treatment Effect (ATE) of {ate:.4f} represents the average difference between treated and control groups after accounting for baseline differences
+    • The 95% confidence interval [{ci_low:.4f}, {ci_high:.4f}] {'excludes' if is_significant else 'includes'} zero
+    • With a p-value of {pval:.4f}, we {'can' if is_significant else 'cannot'} reject the null hypothesis of no treatment effect at the 5% significance level
+    
+    **Effect Size Context:**
+    • The effect magnitude is considered {effect_size} ({abs_ate:.4f} units)
+    • {'This suggests practical significance in addition to statistical significance' if is_significant and effect_size in ['moderate', 'large'] else 'Consider whether this effect size is practically meaningful for your business context'}
+    """
+    
+    # Create recommendations
+    recommendations = []
+    
+    if is_significant:
+        if ate > 0:
+            recommendations.extend([
+                "The intervention shows positive impact - consider scaling or expanding the treatment",
+                "Monitor for sustainability of the effect over longer time periods",
+                "Investigate which aspects of the intervention drive the positive results"
+            ])
+        else:
+            recommendations.extend([
+                "The intervention shows negative impact - investigate potential causes",
+                "Consider discontinuing or modifying the intervention approach",
+                "Analyze if the negative effect is due to implementation issues or inherent design flaws"
+            ])
+    else:
+        recommendations.extend([
+            "No significant effect detected - the intervention may not be effective as implemented",
+            "Consider increasing sample size or treatment intensity for future experiments",
+            "Investigate potential moderating factors that might influence treatment effectiveness",
+            "Review intervention design and implementation for potential improvements"
+        ])
+    
+    # Add general recommendations
+    recommendations.extend([
+        "Validate results with additional data or robustness checks",
+        "Consider heterogeneous treatment effects across different subgroups",
+        "Assess cost-benefit implications of the intervention"
+    ])
+    
+    return {
+        "summary": summary,
+        "details": details,
+        "recommendations": recommendations
+    }
+
+
 def display_var_metrics(results: Any) -> None:
     """
-    Display VAR model diagnostics and metrics.
+    Display comprehensive VAR model diagnostics and metrics.
     
     Args:
         results: Trained VAR model results
     """
     try:
-        st.subheader("Model Diagnostics (VAR)")
+        st.subheader("✨ Vector Autoregression (VAR) Analysis")
         
-        stability_status = " Stable" if results.is_stable() else " Unstable"
-        st.markdown(
-            f"**Selected Lag Order:** {results.k_ar}  |  **AIC:** {results.aic:.2f}  |  **BIC:** {results.bic:.2f}"
-        )
-        st.markdown(f"**Stability check:** {stability_status}")
+        # Model Summary Section
+        st.markdown("**VAR Model Summary:**")
+        try:
+            summary_str = str(results.summary())
+            st.text(summary_str)
+        except:
+            st.info("Detailed model summary not available for this VAR implementation")
         
-        logger.info("VAR metrics displayed successfully")
+        # Key Model Statistics
+        st.markdown("### 📊 Model Performance Metrics")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Lag Order", f"{results.k_ar}")
+        with col2:
+            st.metric("AIC", f"{results.aic:.2f}")
+        with col3:
+            st.metric("BIC", f"{results.bic:.2f}")
+        with col4:
+            st.metric("FPE", f"{results.fpe:.6f}" if hasattr(results, 'fpe') else "N/A")
+        
+        # Stability Analysis
+        st.markdown("### 🔍 Stability Analysis")
+        is_stable = results.is_stable()
+        stability_color = "🟢" if is_stable else "🔴"
+        stability_text = "System is Stable" if is_stable else "System is Unstable"
+        
+        st.markdown(f"**{stability_color} {stability_text}**")
+        
+        if is_stable:
+            st.success("The VAR system satisfies the stability condition. All eigenvalues lie inside the unit circle.")
+        else:
+            st.error("⚠️ The VAR system is unstable! Some eigenvalues lie outside the unit circle. Results may be unreliable.")
+        
+        # Equation-wise Statistics
+        st.markdown("### 📊 Equation-wise Model Statistics")
+        
+        # Create table for equation statistics
+        equation_stats = []
+        endog_names = results.names if hasattr(results, 'names') else [f"Equation_{i+1}" for i in range(results.neqs)]
+        
+        for i, eq_name in enumerate(endog_names):
+            try:
+                # Extract R-squared and other stats for each equation
+                eq_rsquared = results.rsquared[i] if hasattr(results, 'rsquared') and len(results.rsquared) > i else None
+                eq_rsquared_adj = results.rsquared_adj[i] if hasattr(results, 'rsquared_adj') and len(results.rsquared_adj) > i else None
+                
+                equation_stats.append({
+                    "Equation": eq_name,
+                    "R-squared": f"{eq_rsquared:.4f}" if eq_rsquared is not None else "N/A",
+                    "Adj R-squared": f"{eq_rsquared_adj:.4f}" if eq_rsquared_adj is not None else "N/A",
+                    "Observations": results.nobs if hasattr(results, 'nobs') else "N/A"
+                })
+            except Exception as eq_error:
+                logger.warning(f"Could not extract stats for equation {eq_name}: {eq_error}")
+                equation_stats.append({
+                    "Equation": eq_name,
+                    "R-squared": "N/A",
+                    "Adj R-squared": "N/A",
+                    "Observations": "N/A"
+                })
+        
+        if equation_stats:
+            eq_df = pd.DataFrame(equation_stats)
+            st.dataframe(eq_df, use_container_width=True)
+        
+        # Granger Causality Tests (if available)
+        st.markdown("### 🔍 Granger Causality Analysis")
+        try:
+            st.info("Granger causality tests help identify which variables predict others in the VAR system.")
+            
+            # If we have variable names, show potential causality relationships
+            if hasattr(results, 'names') and len(results.names) > 1:
+                st.markdown("**Variables in the system:**")
+                for name in results.names:
+                    st.markdown(f"• {name}")
+                
+                st.markdown("💡 **Interpretation**: Use `results.test_causality()` to test specific Granger causality hypotheses.")
+            
+        except Exception as causality_error:
+            logger.warning(f"Granger causality analysis error: {causality_error}")
+        
+        # Model Diagnostics
+        st.markdown("### 🔬 Model Diagnostics")
+        
+        diag_col1, diag_col2, diag_col3 = st.columns(3)
+        
+        with diag_col1:
+            st.metric("Total Observations", f"{results.nobs}" if hasattr(results, 'nobs') else "N/A")
+        with diag_col2:
+            st.metric("Number of Variables", f"{results.neqs}" if hasattr(results, 'neqs') else "N/A")
+        with diag_col3:
+            st.metric("Degrees of Freedom", f"{results.df_resid}" if hasattr(results, 'df_resid') else "N/A")
+        
+        # Residual Analysis
+        st.markdown("### 📊 Residual Diagnostics")
+        
+        try:
+            # Check for residual autocorrelation and heteroscedasticity
+            st.info("Residual analysis helps validate model assumptions about error terms.")
+            
+            # If residuals are available, compute basic statistics
+            if hasattr(results, 'resid'):
+                resid = results.resid
+                st.markdown("**Residual Summary Statistics:**")
+                
+                resid_stats = pd.DataFrame({
+                    'Mean': resid.mean(),
+                    'Std': resid.std(),
+                    'Min': resid.min(),
+                    'Max': resid.max()
+                })
+                st.dataframe(resid_stats.T, use_container_width=True)
+                
+        except Exception as resid_error:
+            logger.warning(f"Residual analysis error: {resid_error}")
+            st.info("Detailed residual diagnostics not available for this VAR model.")
+        
+        # Business Interpretation
+        st.markdown("### 💼 Business Interpretation & Conclusions")
+        
+        interpretation = create_var_interpretation(results, is_stable)
+        
+        if is_stable:
+            st.success(interpretation["summary"])
+        else:
+            st.warning(interpretation["summary"])
+        
+        st.info(interpretation["details"])
+        
+        # Recommendations
+        st.markdown("### 🎯 Recommendations")
+        for rec in interpretation["recommendations"]:
+            st.markdown(f"• {rec}")
+        
+        logger.info("Enhanced VAR metrics displayed successfully")
         
     except Exception as e:
         logger.error(f"Error displaying VAR metrics: {str(e)}")
         st.error(f"Error computing VAR metrics: {str(e)}")
 
 
+def create_var_interpretation(results: Any, is_stable: bool) -> Dict[str, any]:
+    """
+    Create business interpretation for VAR results.
+    
+    Args:
+        results: VAR model results
+        is_stable: Whether the VAR system is stable
+        
+    Returns:
+        Dictionary with summary, details, and recommendations
+    """
+    
+    # Extract key information
+    lag_order = results.k_ar if hasattr(results, 'k_ar') else None
+    aic = results.aic if hasattr(results, 'aic') else None
+    bic = results.bic if hasattr(results, 'bic') else None
+    n_vars = results.neqs if hasattr(results, 'neqs') else None
+    
+    # Create summary
+    if is_stable:
+        summary = f"VAR({lag_order}) model is statistically stable and suitable for analysis. The system captures dynamic relationships between {n_vars} variables with {lag_order} lags."
+    else:
+        summary = f"⚠️ VAR({lag_order}) model shows instability. Results should be interpreted with caution as the system may not converge to equilibrium."
+    
+    # Create detailed explanation
+    details = f"""
+    **Model Specification:**
+    • VAR model with {lag_order} lag{'s' if lag_order != 1 else ''} explaining {n_vars} endogenous variables
+    • Each variable is regressed on its own lags and lags of all other variables in the system
+    • AIC: {aic:.2f}, BIC: {bic:.2f} (lower values indicate better model fit vs complexity trade-off)
+    
+    **System Properties:**
+    • {'Stability condition satisfied' if is_stable else 'Stability condition violated'} - {'reliable' if is_stable else 'potentially unreliable'} for forecasting
+    • VAR models capture bidirectional causality and dynamic interactions between variables
+    • Useful for understanding how shocks to one variable propagate through the system
+    
+    **Applications:**
+    • Impulse Response Analysis: Trace effects of shocks over time
+    • Forecast Error Variance Decomposition: Understand variable contributions to forecast uncertainty
+    • Granger Causality: Test predictive relationships between variables
+    """
+    
+    # Create recommendations
+    recommendations = []
+    
+    if is_stable:
+        recommendations.extend([
+            "Proceed with impulse response analysis to understand shock propagation",
+            "Conduct Granger causality tests to identify predictive relationships",
+            "Use forecast error variance decomposition to understand variable interactions",
+            "Consider the model suitable for forecasting within reasonable time horizons"
+        ])
+    else:
+        recommendations.extend([
+            "⚠️ Address stability issues before proceeding with analysis",
+            "Consider reducing the lag order or removing problematic variables",
+            "Check for unit roots in the data - consider VECM if cointegration is present",
+            "Validate model specification and consider alternative modeling approaches"
+        ])
+    
+    # Model selection recommendations
+    if aic is not None and bic is not None:
+        recommendations.extend([
+            f"Current model selection: AIC={aic:.2f}, BIC={bic:.2f}",
+            "Consider testing alternative lag orders using information criteria",
+            "Compare with simpler models (AR) or more complex specifications if needed"
+        ])
+    
+    # General VAR recommendations
+    recommendations.extend([
+        "Validate residuals for autocorrelation and heteroscedasticity",
+        "Check structural breaks in the data period",
+        "Consider economic theory when interpreting causal relationships",
+        "Use cross-validation for out-of-sample forecast evaluation"
+    ])
+    
+    return {
+        "summary": summary,
+        "details": details,
+        "recommendations": recommendations
+    }
+
+
 def display_synthetic_control_metrics(predictions: pd.DataFrame) -> None:
     """
-    Display Synthetic Control model diagnostics and metrics.
+    Display comprehensive Synthetic Control model diagnostics and metrics.
     
     Args:
         predictions: Predictions DataFrame with Actual and Synthetic columns
     """
     try:
-        st.subheader("Model Diagnostics (Synthetic Control)")
+        st.subheader("✨ Synthetic Control Method Analysis")
         
-        rmspe = np.sqrt(((predictions["Actual"] - predictions["Synthetic"]) ** 2).mean())
-        st.markdown(f"**RMSPE:** {rmspe:.2f}")
+        # Data validation
+        if "Actual" not in predictions.columns or "Synthetic" not in predictions.columns:
+            st.error("Required columns 'Actual' and 'Synthetic' not found in predictions DataFrame.")
+            return
         
-        # Create actual vs predicted comparison chart for Synthetic Control
+        actual = predictions["Actual"]
+        synthetic = predictions["Synthetic"]
+        
+        # Comprehensive Model Summary
+        st.markdown("### 📊 Model Performance Metrics")
+        
+        # Calculate multiple fit statistics
+        rmspe = np.sqrt(((actual - synthetic) ** 2).mean())
+        mspe = ((actual - synthetic) ** 2).mean()
+        mae = np.abs(actual - synthetic).mean()
+        mape = np.mean(np.abs((actual - synthetic) / actual)) * 100 if (actual != 0).all() else None
+        
+        # R-squared like measure
+        ss_res = np.sum((actual - synthetic) ** 2)
+        ss_tot = np.sum((actual - np.mean(actual)) ** 2)
+        r_squared_like = 1 - (ss_res / ss_tot) if ss_tot != 0 else None
+        
+        # Display metrics in columns
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("RMSPE", f"{rmspe:.4f}")
+        with col2:
+            st.metric("MAE", f"{mae:.4f}")
+        with col3:
+            st.metric("R²-like", f"{r_squared_like:.4f}" if r_squared_like is not None else "N/A")
+        with col4:
+            st.metric("MAPE (%)", f"{mape:.2f}%" if mape is not None else "N/A")
+        
+        # Treatment Effect Analysis
+        st.markdown("### 🎯 Treatment Effect Analysis")
+        
+        # Check if we have post/pre treatment indicators
+        treatment_effects = actual - synthetic
+        
+        if "Post" in predictions.columns and "Treated" in predictions.columns:
+            # Split analysis into pre/post treatment
+            pre_treatment = predictions[predictions["Post"] == 0]
+            post_treatment = predictions[(predictions["Post"] == 1) & (predictions["Treated"] == 1)]
+            
+            if len(pre_treatment) > 0 and len(post_treatment) > 0:
+                pre_rmspe = np.sqrt(((pre_treatment["Actual"] - pre_treatment["Synthetic"]) ** 2).mean())
+                post_effects = post_treatment["Actual"] - post_treatment["Synthetic"]
+                
+                avg_treatment_effect = post_effects.mean()
+                treatment_effect_std = post_effects.std()
+                cumulative_effect = post_effects.sum()
+                
+                # Display treatment effect metrics
+                effect_col1, effect_col2, effect_col3 = st.columns(3)
+                
+                with effect_col1:
+                    st.metric("Average Treatment Effect", f"{avg_treatment_effect:.4f}")
+                with effect_col2:
+                    st.metric("Pre-Treatment RMSPE", f"{pre_rmspe:.4f}")
+                with effect_col3:
+                    st.metric("Cumulative Effect", f"{cumulative_effect:.4f}")
+                
+                # Effect significance assessment (informal)
+                effect_magnitude = abs(avg_treatment_effect)
+                pre_treatment_std = pre_treatment["Actual"].std()
+                effect_size = effect_magnitude / pre_treatment_std if pre_treatment_std > 0 else None
+                
+                if effect_size is not None:
+                    if effect_size > 0.8:
+                        effect_assessment = "Large"
+                        effect_color = "🟢"
+                    elif effect_size > 0.5:
+                        effect_assessment = "Medium"
+                        effect_color = "🟡"
+                    elif effect_size > 0.2:
+                        effect_assessment = "Small"
+                        effect_color = "🟠"
+                    else:
+                        effect_assessment = "Negligible"
+                        effect_color = "⚪"
+                    
+                    st.markdown(f"**{effect_color} Effect Size: {effect_assessment}** (Cohen's d ≈ {effect_size:.2f})")
+                
+        else:
+            # Overall treatment effect without pre/post split
+            avg_effect = treatment_effects.mean()
+            cumulative_effect = treatment_effects.sum()
+            
+            st.metric("Average Effect", f"{avg_effect:.4f}")
+            st.metric("Cumulative Effect", f"{cumulative_effect:.4f}")
+        
+        # Model Fit Quality Assessment
+        st.markdown("### 🔍 Model Fit Quality")
+        
+        # Fit quality indicators
+        fit_quality = "Excellent" if rmspe < 0.05 else "Good" if rmspe < 0.1 else "Fair" if rmspe < 0.2 else "Poor"
+        fit_color = "🟢" if fit_quality == "Excellent" else "🟡" if fit_quality == "Good" else "🟠" if fit_quality == "Fair" else "🔴"
+        
+        st.markdown(f"**{fit_color} Overall Fit Quality: {fit_quality}** (RMSPE: {rmspe:.4f})")
+        
+        # Residual analysis
+        residuals = actual - synthetic
+        residual_autocorr = residuals.autocorr() if hasattr(residuals, 'autocorr') else None
+        
+        if residual_autocorr is not None:
+            autocorr_assessment = "Low" if abs(residual_autocorr) < 0.3 else "Moderate" if abs(residual_autocorr) < 0.7 else "High"
+            st.markdown(f"**Residual Autocorrelation: {autocorr_assessment}** ({residual_autocorr:.3f})")
+        
+        # Weights Analysis (if available)
+        if "Treatment_Effect" in predictions.columns or any(col.startswith("Weight_") for col in predictions.columns):
+            st.markdown("### ⚙️ Synthetic Control Weights")
+            st.info("Weights analysis shows which control units contribute most to the synthetic control.")
+        
+        # Create actual vs synthetic comparison chart
+        st.markdown("### 📈 Actual vs Synthetic Comparison")
         try:
             # Find date column in predictions
             date_cols = [col for col in predictions.columns if pd.api.types.is_datetime64_any_dtype(predictions[col])]
             if not date_cols:
                 date_cols = [col for col in predictions.columns if 'date' in col.lower()]
             
-            if date_cols and "Actual" in predictions.columns and "Synthetic" in predictions.columns:
+            if date_cols:
                 date_col = date_cols[0]
                 
-                # Prepare data for the chart - rename Synthetic to prediction for consistency
+                # Prepare data for the chart
                 chart_predictions = predictions.rename(columns={"Synthetic": "prediction"})
                 
                 fig_comparison = create_actual_vs_predicted_chart(
@@ -1163,84 +1836,1091 @@ def display_synthetic_control_metrics(predictions: pd.DataFrame) -> None:
                 fig_comparison.update_layout(title='Actual vs Synthetic Control Over Time')
                 st.plotly_chart(fig_comparison, use_container_width=True)
             else:
-                st.info("Required columns not found for comparison chart.")
+                st.info("Date column not found for time series visualization.")
                 
         except Exception as chart_error:
             st.warning(f"Could not create actual vs synthetic chart: {str(chart_error)}")
         
-        logger.info("Synthetic Control metrics displayed successfully")
+        # Business Interpretation
+        st.markdown("### 💼 Business Interpretation & Conclusions")
+        
+        interpretation = create_synthetic_control_interpretation(
+            rmspe, avg_treatment_effect if 'avg_treatment_effect' in locals() else treatment_effects.mean(),
+            fit_quality, r_squared_like
+        )
+        
+        if fit_quality in ["Excellent", "Good"]:
+            st.success(interpretation["summary"])
+        elif fit_quality == "Fair":
+            st.warning(interpretation["summary"])
+        else:
+            st.error(interpretation["summary"])
+        
+        st.info(interpretation["details"])
+        
+        # Recommendations
+        st.markdown("### 🎯 Recommendations")
+        for rec in interpretation["recommendations"]:
+            st.markdown(f"• {rec}")
+        
+        logger.info("Enhanced Synthetic Control metrics displayed successfully")
         
     except Exception as e:
         logger.error(f"Error displaying Synthetic Control metrics: {str(e)}")
         st.error(f"Error computing Synthetic Control metrics: {str(e)}")
 
 
-def display_causal_impact_metrics(predictions: pd.DataFrame, df_original: pd.DataFrame, target: str) -> None:
+def create_synthetic_control_interpretation(rmspe: float, treatment_effect: float, fit_quality: str, r_squared_like: float = None) -> Dict[str, any]:
     """
-    Display CausalImpact model diagnostics and metrics.
+    Create business interpretation for Synthetic Control results.
     
     Args:
-        predictions: Predictions DataFrame
-        df_original: Original DataFrame
+        rmspe: Root Mean Squared Prediction Error
+        treatment_effect: Average treatment effect
+        fit_quality: Quality of the synthetic control fit
+        r_squared_like: R-squared like measure
+        
+    Returns:
+        Dictionary with summary, details, and recommendations
+    """
+    
+    # Determine effect magnitude
+    abs_effect = abs(treatment_effect)
+    effect_direction = "positive" if treatment_effect > 0 else "negative" if treatment_effect < 0 else "no"
+    
+    # Create summary based on fit quality and effect
+    if fit_quality in ["Excellent", "Good"]:
+        if effect_direction != "no":
+            summary = f"High-quality synthetic control detected a {effect_direction} treatment effect of {treatment_effect:.4f} units. The synthetic control provides a reliable counterfactual (RMSPE: {rmspe:.4f})."
+        else:
+            summary = f"High-quality synthetic control found no meaningful treatment effect. The intervention appears to have minimal impact."
+    elif fit_quality == "Fair":
+        summary = f"Moderate-quality synthetic control suggests a {effect_direction} treatment effect of {treatment_effect:.4f} units. Results should be interpreted with some caution due to moderate fit quality (RMSPE: {rmspe:.4f})."
+    else:
+        summary = f"⚠️ Poor synthetic control fit (RMSPE: {rmspe:.4f}). Treatment effect estimates may be unreliable. Consider alternative methodologies."
+    
+    # Create detailed explanation
+    details = f"""
+    **Synthetic Control Method:**
+    • Creates a weighted combination of control units to match the treated unit's pre-treatment characteristics
+    • RMSPE of {rmspe:.4f} indicates {'excellent' if rmspe < 0.05 else 'good' if rmspe < 0.1 else 'fair' if rmspe < 0.2 else 'poor'} pre-treatment fit
+    • Post-treatment differences are attributed to the intervention (treatment effect)
+    
+    **Treatment Effect Assessment:**
+    • Average effect: {treatment_effect:.4f} units ({effect_direction} direction)
+    • Effect interpretation depends on the quality of the synthetic control construction
+    • {'Strong' if fit_quality in ['Excellent', 'Good'] else 'Moderate' if fit_quality == 'Fair' else 'Weak'} evidence for causal inference
+    
+    **Model Assumptions:**
+    • No spillover effects between treated and control units
+    • Control units not affected by unobserved shocks that also affect the treated unit
+    • Sufficient pre-treatment periods to establish baseline patterns
+    """
+    
+    # Create recommendations
+    recommendations = []
+    
+    if fit_quality in ["Excellent", "Good"]:
+        if abs_effect > 0.01:  # Meaningful effect threshold
+            recommendations.extend([
+                f"Strong evidence for {effect_direction} treatment effect - consider {'scaling' if treatment_effect > 0 else 'discontinuing'} the intervention",
+                "Conduct robustness checks with alternative donor pools or time periods",
+                "Investigate mechanisms driving the treatment effect",
+                "Monitor for treatment effect persistence over time"
+            ])
+        else:
+            recommendations.extend([
+                "No significant treatment effect detected despite good model fit",
+                "Consider intervention modifications or alternative approaches",
+                "Examine if the intervention was implemented as designed",
+                "Look for heterogeneous effects across subgroups"
+            ])
+    else:
+        recommendations.extend([
+            "⚠️ Poor synthetic control fit limits causal inference reliability",
+            "Consider expanding the donor pool or extending pre-treatment period",
+            "Evaluate alternative matching methods or covariates",
+            "Cross-validate results with other causal inference methods (DiD, etc.)"
+        ])
+    
+    # Model-specific recommendations
+    recommendations.extend([
+        "Examine individual donor unit weights to understand synthetic control composition",
+        "Conduct placebo tests using control units as fake treated units",
+        "Perform inference using permutation-based statistical tests",
+        "Visualize treatment effect over time to assess temporal patterns"
+    ])
+    
+    # Validation recommendations
+    if r_squared_like is not None and r_squared_like < 0.7:
+        recommendations.append("Consider improving synthetic control fit - low R²-like measure suggests poor counterfactual quality")
+    
+    return {
+        "summary": summary,
+        "details": details,
+        "recommendations": recommendations
+    }
+
+
+def display_causal_impact_metrics(predictions: pd.DataFrame, df_original: pd.DataFrame, target: str) -> None:
+    """
+    Display comprehensive CausalImpact model diagnostics and metrics.
+    
+    Args:
+        predictions: Predictions DataFrame with prediction and optionally confidence intervals
+        df_original: Original DataFrame with actual target values
         target: Target variable name
     """
     try:
-        st.subheader("Model Diagnostics (CausalImpact)")
+        st.subheader("✨ Bayesian Causal Impact Analysis")
         
+        # Data validation
         if target not in df_original.columns:
-            st.warning("Target column missing in original data; cannot compute effect.")
+            st.error(f"Target column '{target}' not found in original data.")
             return
-            
-        df_effect = df_original[target] - predictions["prediction"]
-        cumulative = df_effect.cumsum().iloc[-1]
-        st.markdown(f"**Cumulative effect:** {cumulative:.2f}")
         
-        # Create actual vs predicted comparison chart for CausalImpact
+        if "prediction" not in predictions.columns:
+            st.error("Prediction column not found in predictions DataFrame.")
+            return
+        
+        actual = df_original[target]
+        predicted = predictions["prediction"]
+        
+        # Ensure same length
+        min_len = min(len(actual), len(predicted))
+        actual = actual.iloc[:min_len]
+        predicted = predicted.iloc[:min_len]
+        
+        # Calculate comprehensive metrics
+        treatment_effects = actual - predicted
+        
+        # Model Performance Metrics
+        st.markdown("### 📊 Model Performance Metrics")
+        
+        cumulative_effect = treatment_effects.sum()
+        average_effect = treatment_effects.mean()
+        effect_std = treatment_effects.std()
+        
+        # Calculate confidence metrics if available
+        has_confidence_intervals = "prediction_lower" in predictions.columns and "prediction_upper" in predictions.columns
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Cumulative Effect", f"{cumulative_effect:.4f}")
+        with col2:
+            st.metric("Average Effect", f"{average_effect:.4f}")
+        with col3:
+            st.metric("Effect Std Dev", f"{effect_std:.4f}")
+        with col4:
+            # Model fit measure
+            prediction_accuracy = 1 - (np.mean((actual - predicted) ** 2) / np.var(actual)) if np.var(actual) > 0 else None
+            st.metric("Prediction R²", f"{prediction_accuracy:.4f}" if prediction_accuracy is not None else "N/A")
+        
+        # Posterior Analysis (if confidence intervals available)
+        if has_confidence_intervals:
+            st.markdown("### 🎯 Posterior Statistics & Uncertainty")
+            
+            pred_lower = predictions["prediction_lower"].iloc[:min_len]
+            pred_upper = predictions["prediction_upper"].iloc[:min_len]
+            
+            # Calculate credible intervals for effects
+            effect_lower = actual - pred_upper  # Note: bounds are flipped for effects
+            effect_upper = actual - pred_lower
+            
+            cumulative_effect_lower = effect_lower.sum()
+            cumulative_effect_upper = effect_upper.sum()
+            
+            # Display credible intervals
+            ci_col1, ci_col2, ci_col3 = st.columns(3)
+            
+            with ci_col1:
+                st.metric("Cumulative Effect CI", 
+                         f"[{cumulative_effect_lower:.3f}, {cumulative_effect_upper:.3f}]")
+            with ci_col2:
+                # Check if effect is "significant" (CI doesn't include 0)
+                effect_significant = (cumulative_effect_lower > 0 and cumulative_effect_upper > 0) or \
+                                   (cumulative_effect_lower < 0 and cumulative_effect_upper < 0)
+                significance_color = "🟢" if effect_significant else "🔴"
+                significance_text = "Significant" if effect_significant else "Not Significant"
+                st.markdown(f"**{significance_color} {significance_text}**")
+            
+            with ci_col3:
+                # Posterior probability of positive effect
+                prob_positive = np.mean(treatment_effects > 0) * 100
+                st.metric("P(Effect > 0)", f"{prob_positive:.1f}%")
+        
+        # Effect Magnitude Assessment
+        st.markdown("### 🔍 Effect Magnitude & Direction")
+        
+        # Determine effect size and direction
+        baseline_std = actual.std()
+        effect_size = abs(average_effect) / baseline_std if baseline_std > 0 else None
+        
+        if effect_size is not None:
+            if effect_size > 0.8:
+                magnitude = "Large"
+                magnitude_color = "🟢"
+            elif effect_size > 0.5:
+                magnitude = "Medium"
+                magnitude_color = "🟡"
+            elif effect_size > 0.2:
+                magnitude = "Small"
+                magnitude_color = "🟠"
+            else:
+                magnitude = "Negligible"
+                magnitude_color = "⚪"
+        else:
+            magnitude = "Unknown"
+            magnitude_color = "⚪"
+        
+        direction = "Positive" if average_effect > 0 else "Negative" if average_effect < 0 else "No"
+        direction_emoji = "📈" if average_effect > 0 else "📉" if average_effect < 0 else "➡️"
+        
+        st.markdown(f"**{direction_emoji} Direction: {direction} Effect**")
+        st.markdown(f"**{magnitude_color} Magnitude: {magnitude}** (Effect size ≈ {effect_size:.3f})" if effect_size else "**Magnitude: Unknown**")
+        
+        # Time Series Analysis
+        st.markdown("### 📈 Time Series Analysis")
+        
+        # Check for trend in treatment effects
+        if len(treatment_effects) > 3:
+            from scipy import stats
+            time_index = np.arange(len(treatment_effects))
+            slope, intercept, r_value, p_value, std_err = stats.linregress(time_index, treatment_effects)
+            
+            trend_direction = "Increasing" if slope > 0 else "Decreasing" if slope < 0 else "Stable"
+            trend_significance = "Significant" if p_value < 0.05 else "Not Significant"
+            
+            st.markdown(f"**Effect Trend: {trend_direction}** (slope: {slope:.4f}, p-value: {p_value:.4f})")
+            st.markdown(f"**Trend Significance: {trend_significance}**")
+        
+        # Model Diagnostics
+        st.markdown("### 🔬 Model Diagnostics")
+        
+        # Residual analysis
+        residuals = actual - predicted
+        
+        diag_col1, diag_col2, diag_col3 = st.columns(3)
+        
+        with diag_col1:
+            st.metric("Observations", f"{len(actual)}")
+        with diag_col2:
+            # Check for autocorrelation in residuals
+            residual_autocorr = residuals.autocorr() if hasattr(residuals, 'autocorr') else None
+            if residual_autocorr is not None:
+                st.metric("Residual Autocorr", f"{residual_autocorr:.3f}")
+            else:
+                st.metric("Residual Autocorr", "N/A")
+        with diag_col3:
+            # Residual standard deviation
+            residual_std = residuals.std()
+            st.metric("Residual Std", f"{residual_std:.4f}")
+        
+        # Create comprehensive comparison chart
+        st.markdown("### 📈 Actual vs Predicted with Treatment Effects")
+        
         try:
             # Find date column
             date_cols = [col for col in df_original.columns if pd.api.types.is_datetime64_any_dtype(df_original[col])]
             if not date_cols:
                 date_cols = [col for col in df_original.columns if 'date' in col.lower()]
             
-            if date_cols and "prediction" in predictions.columns:
+            if date_cols:
                 date_col = date_cols[0]
                 
                 fig_comparison = create_actual_vs_predicted_chart(
                     df_original, predictions, date_col, target, 'prediction'
                 )
-                fig_comparison.update_layout(title='Actual vs CausalImpact Prediction Over Time')
+                fig_comparison.update_layout(
+                    title='Actual vs CausalImpact Prediction with Treatment Effects',
+                    showlegend=True
+                )
+                
+                # Add treatment effect as additional trace if we have dates
+                if len(df_original) >= len(treatment_effects):
+                    fig_comparison.add_trace(
+                        go.Scatter(
+                            x=df_original[date_col].iloc[:len(treatment_effects)],
+                            y=treatment_effects,
+                            mode='lines',
+                            name='Treatment Effect',
+                            line=dict(color='orange', dash='dot'),
+                            yaxis='y2'
+                        )
+                    )
+                    
+                    # Add secondary y-axis for treatment effects
+                    fig_comparison.update_layout(
+                        yaxis2=dict(
+                            title="Treatment Effect",
+                            overlaying='y',
+                            side='right'
+                        )
+                    )
+                
                 st.plotly_chart(fig_comparison, use_container_width=True)
             else:
-                st.info("Required columns not found for comparison chart.")
+                st.info("Date column not found for time series visualization.")
                 
         except Exception as chart_error:
-            st.warning(f"Could not create actual vs predicted chart: {str(chart_error)}")
+            st.warning(f"Could not create comprehensive chart: {str(chart_error)}")
         
-        logger.info("CausalImpact metrics displayed successfully")
+        # Business Interpretation
+        st.markdown("### 💼 Business Interpretation & Conclusions")
+        
+        interpretation = create_causal_impact_interpretation(
+            cumulative_effect, average_effect, has_confidence_intervals, 
+            effect_significant if has_confidence_intervals else None,
+            magnitude, direction
+        )
+        
+        if has_confidence_intervals and 'effect_significant' in locals() and effect_significant:
+            st.success(interpretation["summary"])
+        elif has_confidence_intervals:
+            st.warning(interpretation["summary"])
+        else:
+            st.info(interpretation["summary"])
+        
+        st.info(interpretation["details"])
+        
+        # Recommendations
+        st.markdown("### 🎯 Recommendations")
+        for rec in interpretation["recommendations"]:
+            st.markdown(f"• {rec}")
+        
+        logger.info("Enhanced CausalImpact metrics displayed successfully")
         
     except Exception as e:
         logger.error(f"Error displaying CausalImpact metrics: {str(e)}")
         st.error(f"Error computing CausalImpact metrics: {str(e)}")
 
 
-def display_psm_metrics(predictions: pd.DataFrame) -> None:
+def create_causal_impact_interpretation(cumulative_effect: float, average_effect: float, has_ci: bool, 
+                                      is_significant: bool = None, magnitude: str = "Unknown", 
+                                      direction: str = "Unknown") -> Dict[str, any]:
     """
-    Display PSM model diagnostics and metrics.
+    Create business interpretation for CausalImpact results.
     
     Args:
-        predictions: Predictions DataFrame with ATT column
+        cumulative_effect: Total cumulative effect
+        average_effect: Average treatment effect per period
+        has_ci: Whether confidence intervals are available
+        is_significant: Whether effect is statistically significant (if CI available)
+        magnitude: Effect size magnitude (Small/Medium/Large/Negligible)
+        direction: Effect direction (Positive/Negative/No)
+        
+    Returns:
+        Dictionary with summary, details, and recommendations
+    """
+    
+    # Create summary based on significance and effect
+    if has_ci and is_significant is not None:
+        if is_significant:
+            summary = f"Bayesian CausalImpact detected a statistically significant {direction.lower()} intervention effect. Cumulative impact: {cumulative_effect:.4f} units, Average per-period effect: {average_effect:.4f} units."
+        else:
+            summary = f"No statistically significant intervention effect detected. The observed changes may be due to natural variation rather than the intervention."
+    else:
+        if direction != "No" and magnitude not in ["Negligible", "Unknown"]:
+            summary = f"CausalImpact suggests a {direction.lower()} intervention effect (cumulative: {cumulative_effect:.4f}, average: {average_effect:.4f} per period). Confidence intervals not available - interpret with caution."
+        else:
+            summary = f"Minimal or no intervention effect detected. Cumulative impact: {cumulative_effect:.4f} units."
+    
+    # Create detailed explanation
+    details = f"""
+    **Bayesian Structural Time Series (BSTS) Method:**
+    • Uses Bayesian inference to model counterfactual outcomes in the absence of intervention
+    • Accounts for uncertainty in model parameters through posterior distributions
+    • {'Provides credible intervals for causal effect estimates' if has_ci else 'Point estimates only - no uncertainty quantification available'}
+    
+    **Effect Assessment:**
+    • Cumulative effect: {cumulative_effect:.4f} units ({direction.lower()} direction)
+    • Average per-period effect: {average_effect:.4f} units
+    • Effect magnitude: {magnitude} (relative to baseline variation)
+    • {'Statistical significance: ' + ('Yes' if is_significant else 'No') if is_significant is not None else 'Statistical significance: Not assessed'}
+    
+    **Interpretation:**
+    • {f'Strong evidence for causal effect' if has_ci and is_significant else 'Moderate evidence for causal effect' if not has_ci and magnitude in ['Medium', 'Large'] else 'Weak evidence for causal effect' if has_ci and not is_significant else 'Limited evidence for causal effect'}
+    • {'The credible interval excludes zero, suggesting the effect is unlikely due to chance' if has_ci and is_significant else 'The credible interval includes zero, suggesting the effect may be due to chance' if has_ci and not is_significant else 'Without confidence intervals, effect significance cannot be formally assessed'}
+    """
+    
+    # Create recommendations
+    recommendations = []
+    
+    if has_ci and is_significant:
+        if direction == "Positive":
+            recommendations.extend([
+                "Strong evidence for positive intervention impact - consider scaling or continuing the intervention",
+                "Monitor effect sustainability over longer time horizons",
+                "Investigate specific intervention components driving the positive effect",
+                "Conduct cost-benefit analysis to assess economic value"
+            ])
+        else:
+            recommendations.extend([
+                "Strong evidence for negative intervention impact - investigate causes immediately",
+                "Consider discontinuing or substantially modifying the intervention",
+                "Analyze implementation issues that may have caused negative effects",
+                "Assess if negative effects were anticipated or unexpected"
+            ])
+    elif has_ci and not is_significant:
+        recommendations.extend([
+            "No statistically significant effect detected - intervention may be ineffective",
+            "Consider increasing intervention intensity or duration for future experiments",
+            "Examine if the intervention was implemented as designed",
+            "Explore potential moderating factors that might influence effectiveness"
+        ])
+    else:
+        # No confidence intervals available
+        if magnitude in ["Medium", "Large"]:
+            recommendations.extend([
+                f"Observed {direction.lower()} effect appears meaningful but lacks formal significance testing",
+                "Implement additional data collection to enable uncertainty quantification",
+                "Consider alternative causal inference methods for validation",
+                "Proceed with caution given limited statistical evidence"
+            ])
+        else:
+            recommendations.extend([
+                "Minimal effect observed - intervention appears to have limited impact",
+                "Consider alternative intervention approaches or designs",
+                "Assess if current measurement approach captures relevant outcomes",
+                "Review intervention theory and implementation quality"
+            ])
+    
+    # Method-specific recommendations
+    recommendations.extend([
+        "Validate BSTS model assumptions (e.g., structural breaks, seasonality)",
+        "Conduct robustness checks with different model specifications",
+        "Consider extending analysis period to assess long-term effects",
+        "Compare results with other causal inference methods (DiD, Synthetic Control)"
+    ])
+    
+    # Model quality recommendations
+    if not has_ci:
+        recommendations.append("⚠️ Implement confidence interval estimation for more robust inference")
+    
+    return {
+        "summary": summary,
+        "details": details,
+        "recommendations": recommendations
+    }
+
+
+def display_psm_metrics(predictions: pd.DataFrame) -> None:
+    """
+    Display comprehensive Propensity Score Matching model diagnostics and metrics.
+    
+    Args:
+        predictions: Predictions DataFrame with ATT and potentially balance statistics
     """
     try:
-        st.subheader("Model Diagnostics (PSM)")
+        st.subheader("✨ Propensity Score Matching Analysis")
+        
+        # Data validation
+        if "ATT" not in predictions.columns:
+            st.error("ATT (Average Treatment Effect on Treated) column not found in predictions.")
+            return
         
         att = predictions["ATT"].iloc[0]
-        st.markdown(f"**ATT:** {att:.3f}")
         
-        logger.info("PSM metrics displayed successfully")
+        # Main Treatment Effect
+        st.markdown("### 🎯 Treatment Effect Results")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Average Treatment Effect on Treated (ATT)", f"{att:.4f}")
+        
+        # Additional metrics if available
+        if "ATT_SE" in predictions.columns:
+            att_se = predictions["ATT_SE"].iloc[0]
+            with col2:
+                st.metric("Standard Error", f"{att_se:.4f}")
+            
+            # Calculate t-statistic and p-value
+            t_stat = att / att_se if att_se != 0 else float('inf')
+            # Using two-tailed t-test approximation
+            from scipy import stats
+            p_value = 2 * (1 - stats.norm.cdf(abs(t_stat)))
+            
+            with col3:
+                st.metric("t-statistic", f"{t_stat:.3f}")
+            with col4:
+                significance = "Significant" if p_value < 0.05 else "Not Significant"
+                significance_color = "🟢" if p_value < 0.05 else "🔴"
+                st.markdown(f"**{significance_color} {significance}**")
+                st.caption(f"p-value: {p_value:.4f}")
+        
+        # Effect Assessment
+        st.markdown("### 🔍 Effect Assessment")
+        
+        # Determine effect magnitude and direction
+        effect_direction = "Positive" if att > 0 else "Negative" if att < 0 else "No"
+        direction_emoji = "📈" if att > 0 else "📉" if att < 0 else "➡️"
+        
+        # Effect size interpretation (basic threshold-based)
+        abs_att = abs(att)
+        if abs_att < 0.01:
+            effect_size = "Negligible"
+            size_color = "⚪"
+        elif abs_att < 0.05:
+            effect_size = "Small"
+            size_color = "🟠"
+        elif abs_att < 0.1:
+            effect_size = "Medium"
+            size_color = "🟡"
+        else:
+            effect_size = "Large"
+            size_color = "🟢"
+        
+        st.markdown(f"**{direction_emoji} Effect Direction: {effect_direction}**")
+        st.markdown(f"**{size_color} Effect Magnitude: {effect_size}** ({abs_att:.4f} units)")
+        
+        # Matching Quality Assessment
+        st.markdown("### ⚙️ Matching Quality Diagnostics")
+        
+        # Check for balance statistics
+        balance_cols = [col for col in predictions.columns if 'balance' in col.lower() or 'bias' in col.lower()]
+        
+        if balance_cols:
+            st.markdown("**Covariate Balance After Matching:**")
+            balance_data = []
+            
+            for col in balance_cols:
+                balance_data.append({
+                    "Covariate": col.replace('_balance', '').replace('balance_', '').replace('_bias', '').replace('bias_', ''),
+                    "Balance Metric": predictions[col].iloc[0] if not predictions[col].empty else "N/A"
+                })
+            
+            if balance_data:
+                balance_df = pd.DataFrame(balance_data)
+                st.dataframe(balance_df, use_container_width=True)
+        else:
+            st.info("Detailed balance statistics not available. This is important for validating PSM assumptions.")
+        
+        # Propensity Score Diagnostics
+        st.markdown("### 📊 Propensity Score Diagnostics")
+        
+        # Check for propensity score information
+        ps_cols = [col for col in predictions.columns if 'propensity' in col.lower() or 'pscore' in col.lower()]
+        
+        if ps_cols:
+            st.info("Propensity score distribution analysis helps validate the overlap assumption.")
+            
+            for col in ps_cols:
+                if not predictions[col].empty:
+                    ps_values = predictions[col].dropna()
+                    if len(ps_values) > 0:
+                        ps_mean = ps_values.mean()
+                        ps_std = ps_values.std()
+                        ps_min = ps_values.min()
+                        ps_max = ps_values.max()
+                        
+                        ps_col1, ps_col2, ps_col3, ps_col4 = st.columns(4)
+                        with ps_col1:
+                            st.metric("PS Mean", f"{ps_mean:.3f}")
+                        with ps_col2:
+                            st.metric("PS Std Dev", f"{ps_std:.3f}")
+                        with ps_col3:
+                            st.metric("PS Range", f"[{ps_min:.3f}, {ps_max:.3f}]")
+                        with ps_col4:
+                            # Common support assessment
+                            overlap_quality = "Good" if ps_min < 0.1 and ps_max > 0.9 else "Limited"
+                            overlap_color = "🟢" if overlap_quality == "Good" else "🟠"
+                            st.markdown(f"**{overlap_color} Overlap: {overlap_quality}**")
+        else:
+            st.warning("⚠️ Propensity score diagnostics not available. This limits the ability to validate key PSM assumptions.")
+        
+        # Matching Statistics
+        st.markdown("### 🔢 Matching Statistics")
+        
+        # Check for matching information
+        match_cols = [col for col in predictions.columns if any(keyword in col.lower() for keyword in ['matched', 'pairs', 'ratio', 'caliper'])]
+        
+        if match_cols:
+            st.markdown("**Matching Configuration:**")
+            for col in match_cols:
+                if not predictions[col].empty:
+                    value = predictions[col].iloc[0]
+                    st.markdown(f"• {col.replace('_', ' ').title()}: {value}")
+        else:
+            st.info("Matching configuration details not provided.")
+        
+        # Sample sizes (if available)
+        if "n_treated" in predictions.columns and "n_control" in predictions.columns:
+            n_treated = predictions["n_treated"].iloc[0]
+            n_control = predictions["n_control"].iloc[0]
+            
+            sample_col1, sample_col2, sample_col3 = st.columns(3)
+            with sample_col1:
+                st.metric("Treated Units", f"{int(n_treated)}")
+            with sample_col2:
+                st.metric("Control Units", f"{int(n_control)}")
+            with sample_col3:
+                ratio = n_control / n_treated if n_treated > 0 else 0
+                st.metric("Control:Treated Ratio", f"{ratio:.2f}:1")
+        
+        # Model Assumptions Checklist
+        st.markdown("### ✅ Key Assumptions Assessment")
+        
+        assumptions = [
+            ("Unconfoundedness", "All relevant confounders are observed and included", "Requires domain expertise - cannot be tested statistically"),
+            ("Overlap/Common Support", "Treated and control units have overlapping propensity scores", "Good" if ps_cols and overlap_quality == "Good" else "Unknown" if not ps_cols else "Limited"),
+            ("Covariate Balance", "Matched samples are balanced on observed covariates", "Good" if balance_cols else "Unknown - balance diagnostics not available"),
+            ("Stable Unit Treatment Value", "No spillover effects between units", "Requires design consideration - assess based on treatment context")
+        ]
+        
+        for assumption, description, assessment in assumptions:
+            if "Good" in assessment:
+                st.success(f"✅ **{assumption}**: {description} - Status: {assessment}")
+            elif "Limited" in assessment or "Unknown" in assessment:
+                st.warning(f"⚠️ **{assumption}**: {description} - Status: {assessment}")
+            else:
+                st.info(f"📝 **{assumption}**: {description} - Status: {assessment}")
+        
+        # Business Interpretation
+        st.markdown("### 💼 Business Interpretation & Conclusions")
+        
+        interpretation = create_psm_interpretation(
+            att, 
+            p_value if 'p_value' in locals() else None,
+            effect_size, effect_direction,
+            bool(balance_cols), bool(ps_cols)
+        )
+        
+        # Display interpretation with appropriate styling
+        if 'p_value' in locals() and p_value < 0.05:
+            st.success(interpretation["summary"])
+        elif 'p_value' in locals():
+            st.warning(interpretation["summary"])
+        else:
+            st.info(interpretation["summary"])
+        
+        st.info(interpretation["details"])
+        
+        # Recommendations
+        st.markdown("### 🎯 Recommendations")
+        for rec in interpretation["recommendations"]:
+            st.markdown(f"• {rec}")
+        
+        logger.info("Enhanced PSM metrics displayed successfully")
         
     except Exception as e:
         logger.error(f"Error displaying PSM metrics: {str(e)}")
         st.error(f"Error computing PSM metrics: {str(e)}")
+
+
+def create_psm_interpretation(att: float, p_value: float = None, effect_size: str = "Unknown", 
+                            direction: str = "Unknown", has_balance: bool = False, 
+                            has_ps_diag: bool = False) -> Dict[str, any]:
+    """
+    Create business interpretation for PSM results.
+    
+    Args:
+        att: Average Treatment Effect on Treated
+        p_value: Statistical significance p-value
+        effect_size: Effect size magnitude (Small/Medium/Large/Negligible)
+        direction: Effect direction (Positive/Negative/No)
+        has_balance: Whether balance diagnostics are available
+        has_ps_diag: Whether propensity score diagnostics are available
+        
+    Returns:
+        Dictionary with summary, details, and recommendations
+    """
+    
+    # Determine statistical significance
+    is_significant = p_value is not None and p_value < 0.05
+    
+    # Create summary based on significance and effect
+    if p_value is not None:
+        if is_significant:
+            summary = f"Propensity Score Matching detected a statistically significant {direction.lower()} treatment effect (ATT = {att:.4f}, p = {p_value:.4f}). Effect size is {effect_size.lower()}."
+        else:
+            summary = f"No statistically significant treatment effect detected through PSM (ATT = {att:.4f}, p = {p_value:.4f}). Observed differences may be due to chance."
+    else:
+        if effect_size not in ["Negligible", "Unknown"]:
+            summary = f"PSM suggests a {direction.lower()} treatment effect (ATT = {att:.4f}). Effect size appears {effect_size.lower()}, but statistical significance not assessed."
+        else:
+            summary = f"Minimal treatment effect detected through PSM (ATT = {att:.4f}). Statistical significance assessment not available."
+    
+    # Create detailed explanation
+    details = f"""
+    **Propensity Score Matching Method:**
+    • Estimates treatment effects by matching treated units with similar control units based on propensity scores
+    • ATT (Average Treatment Effect on Treated): {att:.4f} units
+    • Effect represents the average impact of treatment on those who actually received it
+    • {'Statistical significance: ' + ('Yes' if is_significant else 'No') + f' (p = {p_value:.4f})' if p_value is not None else 'Statistical significance: Not assessed'}
+    
+    **Method Quality:**
+    • {'Balance diagnostics available' if has_balance else 'Balance diagnostics missing - limits assumption validation'}
+    • {'Propensity score diagnostics available' if has_ps_diag else 'Propensity score diagnostics missing - limits overlap assessment'}
+    • {'High-quality analysis with key diagnostics' if has_balance and has_ps_diag else 'Moderate-quality analysis - some diagnostics missing' if has_balance or has_ps_diag else 'Limited-quality analysis - key diagnostics unavailable'}
+    
+    **Causal Inference Strength:**
+    • {'Strong' if is_significant and has_balance and has_ps_diag else 'Moderate' if is_significant or (has_balance and has_ps_diag) else 'Weak'} evidence for causal effect
+    • PSM assumes all confounders are observed and controlled for through matching
+    • Effect estimate applies specifically to the treated population (ATT, not ATE)
+    """
+    
+    # Create recommendations
+    recommendations = []
+    
+    if p_value is not None and is_significant:
+        if direction == "Positive":
+            recommendations.extend([
+                "Statistically significant positive treatment effect - consider expanding the intervention",
+                "Investigate which treated units benefited most to optimize targeting",
+                "Assess cost-effectiveness of scaling the intervention",
+                "Monitor treatment effect sustainability over time"
+            ])
+        else:
+            recommendations.extend([
+                "Statistically significant negative treatment effect - investigate causes immediately",
+                "Assess whether negative effects were anticipated or represent implementation issues",
+                "Consider discontinuing or substantially modifying the intervention",
+                "Analyze subgroups to identify who was most negatively affected"
+            ])
+    elif p_value is not None and not is_significant:
+        recommendations.extend([
+            "No statistically significant effect detected - intervention may be ineffective for treated population",
+            "Consider larger sample sizes or longer treatment periods",
+            "Examine intervention implementation fidelity",
+            "Explore heterogeneous treatment effects across different subgroups"
+        ])
+    else:
+        # No significance testing available
+        if effect_size in ["Medium", "Large"]:
+            recommendations.extend([
+                f"Observed {direction.lower()} effect appears meaningful but lacks significance testing",
+                "Implement statistical inference to assess effect reliability",
+                "Collect additional data to enable proper hypothesis testing",
+                "Consider the practical significance of the observed effect size"
+            ])
+        else:
+            recommendations.extend([
+                "Minimal effect observed - intervention impact appears limited",
+                "Reassess intervention design and targeting criteria",
+                "Consider alternative treatment approaches",
+                "Evaluate if outcome measurement captures relevant impacts"
+            ])
+    
+    # Method-specific recommendations
+    method_recs = [
+        "Validate propensity score model specification and functional form",
+        "Conduct sensitivity analysis for unobserved confounding",
+        "Compare PSM results with other causal inference methods (DiD, RCT if available)"
+    ]
+    
+    if not has_balance:
+        method_recs.append("⚠️ Implement covariate balance checks to validate matching quality")
+    
+    if not has_ps_diag:
+        method_recs.append("⚠️ Add propensity score distribution analysis to assess common support")
+    
+    recommendations.extend(method_recs)
+    
+    # Quality improvement recommendations
+    quality_recs = [
+        "Consider multiple matching algorithms (nearest neighbor, caliper, kernel) for robustness",
+        "Examine treatment effect heterogeneity across different matched subgroups",
+        "Assess matching quality through standardized bias reduction metrics"
+    ]
+    
+    recommendations.extend(quality_recs)
+    
+    return {
+        "summary": summary,
+        "details": details,
+        "recommendations": recommendations
+    }
+
+
+def display_chronos_metrics(model: Any, predictions: pd.DataFrame, df: pd.DataFrame, target: str) -> None:
+    """
+    Display comprehensive Chronos T5 Large forecasting model diagnostics and metrics.
+    
+    Args:
+        model: Trained Chronos model (or model metadata)
+        predictions: Predictions DataFrame with forecasts and confidence intervals
+        df: Original DataFrame for validation
+        target: Target variable name
+    """
+    try:
+        st.subheader("✨ Chronos T5 Large Forecasting Analysis")
+        
+        # Data validation
+        if predictions.empty:
+            st.error("No predictions available for analysis.")
+            return
+        
+        # Forecast Performance Metrics
+        st.markdown("### 📊 Forecast Performance Metrics")
+        
+        # Check if we have actual values for validation
+        has_validation = "actual" in predictions.columns or target in predictions.columns
+        
+        if has_validation:
+            actual_col = "actual" if "actual" in predictions.columns else target
+            pred_col = "prediction" if "prediction" in predictions.columns else predictions.columns[0]
+            
+            actual = predictions[actual_col].dropna()
+            predicted = predictions[pred_col].iloc[:len(actual)]
+            
+            if len(actual) > 0 and len(predicted) > 0:
+                # Calculate comprehensive forecast metrics
+                mae = np.mean(np.abs(actual - predicted))
+                rmse = np.sqrt(np.mean((actual - predicted) ** 2))
+                mape = np.mean(np.abs((actual - predicted) / actual)) * 100 if (actual != 0).all() else None
+                
+                # Calculate directional accuracy
+                actual_direction = np.diff(actual) > 0
+                pred_direction = np.diff(predicted) > 0
+                directional_accuracy = np.mean(actual_direction == pred_direction) * 100 if len(actual_direction) > 0 else None
+                
+                # Display metrics
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("MAE", f"{mae:.4f}")
+                with col2:
+                    st.metric("RMSE", f"{rmse:.4f}")
+                with col3:
+                    st.metric("MAPE (%)", f"{mape:.2f}%" if mape is not None else "N/A")
+                with col4:
+                    st.metric("Directional Accuracy", f"{directional_accuracy:.1f}%" if directional_accuracy is not None else "N/A")
+                
+                # Forecast quality assessment
+                baseline_std = actual.std()
+                relative_mae = mae / baseline_std if baseline_std > 0 else None
+                
+                if relative_mae is not None:
+                    if relative_mae < 0.5:
+                        quality = "Excellent"
+                        quality_color = "🟢"
+                    elif relative_mae < 0.8:
+                        quality = "Good"
+                        quality_color = "🟡"
+                    elif relative_mae < 1.2:
+                        quality = "Fair"
+                        quality_color = "🟠"
+                    else:
+                        quality = "Poor"
+                        quality_color = "🔴"
+                    
+                    st.markdown(f"**{quality_color} Forecast Quality: {quality}** (Relative MAE: {relative_mae:.3f})")
+            else:
+                st.warning("Insufficient validation data for accuracy assessment.")
+        else:
+            st.info("No validation data available. Displaying forecast characteristics only.")
+        
+        # Model Configuration
+        st.markdown("### ⚙️ Model Configuration")
+        
+        # Extract model metadata if available
+        model_info = {}
+        if hasattr(model, 'prediction_length'):
+            model_info['Prediction Length'] = model.prediction_length
+        if hasattr(model, 'model_name'):
+            model_info['Model Name'] = model.model_name
+        if hasattr(model, 'num_samples'):
+            model_info['Number of Samples'] = model.num_samples
+        
+        # Display model configuration
+        if model_info:
+            config_col1, config_col2, config_col3 = st.columns(3)
+            
+            items = list(model_info.items())
+            for i, (key, value) in enumerate(items):
+                col = [config_col1, config_col2, config_col3][i % 3]
+                with col:
+                    st.metric(key, str(value))
+        else:
+            st.info("Model configuration details not available.")
+        
+        # Forecast Uncertainty Analysis
+        st.markdown("### 🎯 Forecast Uncertainty Analysis")
+        
+        # Check for confidence intervals
+        has_intervals = any(col in predictions.columns for col in ['lower', 'upper', 'prediction_lower', 'prediction_upper'])
+        
+        if has_intervals:
+            lower_col = next((col for col in ['lower', 'prediction_lower'] if col in predictions.columns), None)
+            upper_col = next((col for col in ['upper', 'prediction_upper'] if col in predictions.columns), None)
+            
+            if lower_col and upper_col:
+                lower_bounds = predictions[lower_col].dropna()
+                upper_bounds = predictions[upper_col].dropna()
+                
+                if len(lower_bounds) > 0 and len(upper_bounds) > 0:
+                    # Calculate uncertainty metrics
+                    avg_interval_width = np.mean(upper_bounds - lower_bounds)
+                    relative_uncertainty = avg_interval_width / np.mean(predictions[pred_col] if 'pred_col' in locals() else predictions.iloc[:, 0])
+                    
+                    uncertainty_col1, uncertainty_col2 = st.columns(2)
+                    
+                    with uncertainty_col1:
+                        st.metric("Average Prediction Interval Width", f"{avg_interval_width:.4f}")
+                    with uncertainty_col2:
+                        st.metric("Relative Uncertainty", f"{relative_uncertainty:.3f}")
+                    
+                    # Coverage assessment if validation data available
+                    if has_validation and 'actual' in locals():
+                        actual_in_bounds = np.sum((actual >= lower_bounds[:len(actual)]) & (actual <= upper_bounds[:len(actual)]))
+                        coverage = actual_in_bounds / len(actual) * 100 if len(actual) > 0 else 0
+                        
+                        expected_coverage = 95  # Assuming 95% prediction intervals
+                        coverage_quality = "Good" if abs(coverage - expected_coverage) < 10 else "Poor"
+                        coverage_color = "🟢" if coverage_quality == "Good" else "🔴"
+                        
+                        st.markdown(f"**{coverage_color} Prediction Interval Coverage: {coverage:.1f}%** (Expected: ~{expected_coverage}%)")
+                else:
+                    st.info("Confidence interval data is incomplete.")
+            else:
+                st.info("Confidence interval columns not properly identified.")
+        else:
+            st.warning("⚠️ No confidence intervals available. Uncertainty assessment limited.")
+        
+        # Time Series Characteristics
+        st.markdown("### 📈 Time Series Forecast Characteristics")
+        
+        if len(predictions) > 1:
+            # Analyze forecast patterns
+            pred_values = predictions[pred_col] if 'pred_col' in locals() else predictions.iloc[:, 0]
+            
+            # Trend analysis
+            if len(pred_values) > 2:
+                from scipy import stats
+                time_index = np.arange(len(pred_values))
+                slope, intercept, r_value, p_value, std_err = stats.linregress(time_index, pred_values)
+                
+                trend_direction = "Increasing" if slope > 0 else "Decreasing" if slope < 0 else "Stable"
+                trend_strength = "Strong" if abs(r_value) > 0.7 else "Moderate" if abs(r_value) > 0.3 else "Weak"
+                
+                trend_col1, trend_col2, trend_col3 = st.columns(3)
+                
+                with trend_col1:
+                    st.metric("Forecast Trend", trend_direction)
+                with trend_col2:
+                    st.metric("Trend Strength", trend_strength)
+                with trend_col3:
+                    st.metric("Trend R²", f"{r_value**2:.3f}")
+        
+        # Business Interpretation
+        st.markdown("### 💼 Business Interpretation & Conclusions")
+        
+        interpretation = create_chronos_interpretation(
+            quality if 'quality' in locals() else "Unknown",
+            has_validation,
+            mape if 'mape' in locals() else None,
+            directional_accuracy if 'directional_accuracy' in locals() else None,
+            has_intervals,
+            trend_direction if 'trend_direction' in locals() else "Unknown"
+        )
+        
+        if 'quality' in locals():
+            if quality == "Excellent":
+                st.success(interpretation["summary"])
+            elif quality == "Good":
+                st.success(interpretation["summary"])
+            elif quality == "Fair":
+                st.warning(interpretation["summary"])
+            else:
+                st.error(interpretation["summary"])
+        else:
+            st.info(interpretation["summary"])
+        
+        st.info(interpretation["details"])
+        
+        # Recommendations
+        st.markdown("### 🎯 Recommendations")
+        for rec in interpretation["recommendations"]:
+            st.markdown(f"• {rec}")
+        
+        logger.info("Enhanced Chronos metrics displayed successfully")
+        
+    except Exception as e:
+        logger.error(f"Error displaying Chronos metrics: {str(e)}")
+        st.error(f"Error computing Chronos metrics: {str(e)}")
+
+
+def create_chronos_interpretation(quality: str, has_validation: bool, mape: float = None, 
+                                directional_accuracy: float = None, has_intervals: bool = False,
+                                trend: str = "Unknown") -> Dict[str, any]:
+    """Create business interpretation for Chronos forecasting results."""
+    
+    # Create summary
+    if has_validation:
+        if quality == "Excellent":
+            summary = f"Chronos T5 forecasting model demonstrates excellent predictive performance. MAPE: {mape:.2f}%, Directional Accuracy: {directional_accuracy:.1f}%."
+        elif quality == "Good":
+            summary = f"Chronos T5 shows good forecasting performance with reasonable accuracy. MAPE: {mape:.2f}%, Directional Accuracy: {directional_accuracy:.1f}%."
+        elif quality == "Fair":
+            summary = f"Chronos T5 provides fair forecasting accuracy. Consider model refinement. MAPE: {mape:.2f}%, Directional Accuracy: {directional_accuracy:.1f}%."
+        else:
+            summary = f"Chronos T5 forecasting performance is below expectations. Significant model improvement needed. MAPE: {mape:.2f}%."
+    else:
+        summary = "Chronos T5 Large has generated forecasts, but validation data is not available to assess accuracy."
+    
+    # Create detailed explanation
+    details = f"""
+    **Chronos T5 Large Foundation Model:**
+    • Pre-trained transformer model specifically designed for time series forecasting
+    • Leverages large-scale training on diverse time series data for robust predictions
+    • Zero-shot forecasting capability without domain-specific fine-tuning
+    • {'Validation-based assessment available' if has_validation else 'No validation data - forecasts are projections only'}
+    
+    **Forecast Characteristics:**
+    • Trend direction: {trend}
+    • {'Uncertainty quantification available through prediction intervals' if has_intervals else 'Point forecasts only - no uncertainty quantification'}
+    • {'MAPE of ' + f'{mape:.2f}% indicates ' + ('excellent' if mape < 5 else 'good' if mape < 15 else 'fair' if mape < 25 else 'poor') + ' percentage accuracy' if mape is not None else 'Percentage accuracy not assessed'}
+    
+    **Model Reliability:**
+    • Foundation model approach provides robust forecasting across diverse time series patterns
+    • Performance depends on similarity between target series and training data
+    • {'Directional accuracy of ' + f'{directional_accuracy:.1f}% indicates ' + ('excellent' if directional_accuracy > 80 else 'good' if directional_accuracy > 65 else 'moderate') + ' trend prediction capability' if directional_accuracy is not None else 'Trend prediction accuracy not assessed'}
+    """
+    
+    # Create recommendations
+    recommendations = []
+    
+    if has_validation:
+        if quality in ["Excellent", "Good"]:
+            recommendations.extend([
+                "Forecasting model shows strong performance - suitable for business planning",
+                "Use forecasts for strategic decision-making and resource allocation",
+                "Monitor forecast accuracy over time to detect model drift",
+                "Consider ensemble methods combining Chronos with other models for robustness"
+            ])
+        else:
+            recommendations.extend([
+                "⚠️ Forecasting accuracy below optimal levels - exercise caution in decision-making",
+                "Consider data preprocessing improvements (outlier handling, feature engineering)",
+                "Evaluate alternative forecasting methods or model ensembles",
+                "Assess if training data period is representative of current patterns"
+            ])
+    else:
+        recommendations.extend([
+            "⚠️ No validation data available - treat forecasts as projections requiring validation",
+            "Collect actual outcomes to assess model performance over time",
+            "Implement forecast tracking and accuracy monitoring systems",
+            "Consider shorter forecast horizons until validation data becomes available"
+        ])
+    
+    # Technical recommendations
+    if not has_intervals:
+        recommendations.append("⚠️ Implement prediction intervals for uncertainty quantification")
+    
+    recommendations.extend([
+        "Regularly retrain or update model with new data as it becomes available",
+        "Compare Chronos forecasts with traditional statistical methods for validation",
+        "Consider domain-specific adjustments based on business knowledge",
+        "Implement forecast reconciliation if forecasting hierarchical data"
+    ])
+    
+    return {
+        "summary": summary,
+        "details": details,
+        "recommendations": recommendations
+    }
 
 
 # Model metric display dispatcher
@@ -1260,6 +2940,7 @@ MODEL_METRIC_DISPATCH = {
     "Synthetic Control": lambda **kwargs: display_synthetic_control_metrics(kwargs["predictions"]),
     "CausalImpact": lambda **kwargs: display_causal_impact_metrics(kwargs["predictions"], kwargs["df"], kwargs["target"]),
     "PSM": lambda **kwargs: display_psm_metrics(kwargs["predictions"]),
+    "Chronos T5 Large": lambda **kwargs: display_chronos_metrics(kwargs["model"], kwargs["predictions"], kwargs["df"], kwargs["target"]),
 }
 
 
@@ -1775,11 +3456,11 @@ def collect_model_report_data(
                         "std": float(preds.std())
                     },
                     "residual_analysis": {
-                        "residuals_mean": float((actual_values - preds).mean()),
-                        "residuals_std": float((actual_values - preds).std()),
+                        "residuals_mean": float((df[target] - preds).mean()),
+                        "residuals_std": float((df[target] - preds).std()),
                         "residuals_range": {
-                            "min": float((actual_values - preds).min()),
-                            "max": float((actual_values - preds).max())
+                            "min": float((df[target] - preds).min()),
+                            "max": float((df[target] - preds).max())
                         }
                     }
                 }
