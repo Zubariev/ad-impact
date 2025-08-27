@@ -16,6 +16,7 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 import numpy as np
+import threading
 
 # Add src directory to Python path for imports
 current_dir = Path(__file__).parent
@@ -30,6 +31,9 @@ from config import (
     SUPPORTED_FILE_TYPES,
     MIN_OBSERVATIONS_FOR_TRAINING,
 )
+from mlr_enhancements import create_mlr_enhancement_ui
+from background_processes import render_background_process_ui
+
 from data_utils import (
     detect_column_type,
     enforce_feature_limits,
@@ -77,9 +81,23 @@ def create_range_selector(df: pd.DataFrame, range_col: str, model_name: str) -> 
     col_type = detect_column_type(df, range_col)
     
     if col_type == 'datetime':
-        # Date range selector
-        df[range_col] = pd.to_datetime(df[range_col], errors='coerce')
-        min_val, max_val = df[range_col].min(), df[range_col].max()
+        # Custom function to convert 'YYYY_WW' to datetime (e.g., first day of the week)
+        def parse_year_week_app(year_week_str):
+            try:
+                year, week = map(int, str(year_week_str).split('_'))
+                # Create a datetime object for the first day of the given week and year
+                return pd.to_datetime(f'{year}-W{week:02d}-1', format='%Y-W%W-%w')
+            except:
+                return pd.NaT
+
+        # Apply custom parsing to the date_col
+        df_filtered[range_col] = df_filtered[range_col].astype(str).apply(parse_year_week_app)
+        df_filtered = df_filtered.dropna(subset=[range_col])
+        
+        # Set range_col as index before getting min/max for date range
+        df_filtered = df_filtered.set_index(range_col).sort_index()
+
+        min_val, max_val = df_filtered.index.min(), df_filtered.index.max()
         
         start_val, end_val = st.date_input(
             f"Date Range ({range_col})",
@@ -91,7 +109,8 @@ def create_range_selector(df: pd.DataFrame, range_col: str, model_name: str) -> 
         
         start_val = pd.to_datetime(start_val)
         end_val = pd.to_datetime(end_val)
-        df_filtered = df[(df[range_col] >= start_val) & (df[range_col] <= end_val)]
+        # Filter using the DataFrame's index
+        df_filtered = df_filtered[(df_filtered.index >= start_val) & (df_filtered.index <= end_val)]
         st.info(f"Date range selected: {start_val.date()} to {end_val.date()}")
         
     elif col_type in ['numeric', 'integer']:
@@ -633,6 +652,11 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
             
             st.success(f" {model_name} training complete!")
             
+            # Add MLR enhancements if this is MLR model
+            if model_name == "MLR":
+                # Pass the correct variable names that are defined in this scope
+                create_mlr_enhancement_ui(df_for_training, target, features, model_name)
+            
             # Display model-specific visualizations
             if model_name == "DiD":
                 # Display comprehensive DiD visualizations
@@ -1090,6 +1114,11 @@ def create_combine_reports_tab():
         """)
 
 
+def check_background_processes():
+    """Check background processes and display status."""
+    render_background_process_ui()
+
+
 def main():
     """Main Streamlit application."""
     st.set_page_config(
@@ -1100,6 +1129,11 @@ def main():
 
     st.title("Impact Modeling Dashboard")
     st.markdown("**Analyze impact using multiple econometric and ML models**")
+    
+    # Setup sidebar for background processes
+    with st.sidebar:
+        st.subheader("Background Processes")
+        check_background_processes()
 
     # Initialize session state
     if 'df' not in st.session_state:

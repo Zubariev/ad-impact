@@ -64,7 +64,8 @@ def debug_integration():
     
     required_packages = [
         'pandas', 'numpy', 'plotly', 'streamlit', 
-        'scikit-learn', 'statsmodels', 'xgboost'
+        'scikit-learn', 'statsmodels', 'xgboost',
+        'statsmodels'  # Added to check for statsmodels specifically
     ]
     
     for package in required_packages:
@@ -81,6 +82,9 @@ def debug_integration():
         try:
             import pandas as pd
             import numpy as np
+            from statsmodels.tsa.stattools import adfuller, kpss
+            from statsmodels.stats.outliers_influence import variance_inflation_factor
+            from statsmodels.stats.stattools import durbin_watson
             
             # Create sample data
             np.random.seed(42)
@@ -101,6 +105,25 @@ def debug_integration():
             correlation = test_data.corr()
             st.write("Correlation matrix:")
             st.dataframe(correlation.round(3))
+            
+            # Test stationarity check
+            adf_result = adfuller(test_data['target'])
+            st.write("ADF Test result (p-value):", adf_result[1])
+            
+            # Test VIF calculation
+            X = test_data[['feature1', 'feature2', 'feature3']]
+            vif_data = pd.DataFrame()
+            vif_data["Variable"] = X.columns
+            vif_data["VIF"] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
+            st.write("VIF values:")
+            st.dataframe(vif_data)
+            
+            # Test Durbin-Watson
+            import statsmodels.api as sm
+            X = sm.add_constant(X)
+            model = sm.OLS(test_data['target'], X).fit()
+            dw_stat = durbin_watson(model.resid)
+            st.write("Durbin-Watson statistic:", dw_stat)
             
             st.success(" Basic functionality test passed!")
             

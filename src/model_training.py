@@ -902,10 +902,25 @@ def train_synthetic_control(
             # Create a default treatment period (last 30% of data)
             n_obs = len(df)
             treatment_start_idx = int(0.7 * n_obs)
-            df = df.copy()
-            df['post'] = 0
-            df.iloc[treatment_start_idx:, df.columns.get_loc('post')] = 1
-            logger.info(f"Created default treatment period starting at observation {treatment_start_idx}")
+            # Using .loc for setting values on a copy to avoid SettingWithCopyWarning
+            temp_df = df.copy()
+            temp_df['post'] = 0
+            temp_df.loc[temp_df.index[treatment_start_idx:], 'post'] = 1
+            df = temp_df # Update the main df after setting 'post'
+            logger.info(f"Created default treatment period starting at observation {df.index[treatment_start_idx]}")
+        
+        # Split into pre and post periods, ensuring DatetimeIndex and frequency are preserved
+        pre_period_data = df[df['post'] == 0].copy()
+        post_period_data = df[df['post'] == 1].copy()
+        
+        # Explicitly set frequency for consistency after slicing/copying
+        pre_period_data = pre_period_data.asfreq(inferred_freq)
+        post_period_data = post_period_data.asfreq(inferred_freq)
+
+        if len(pre_period_data) < 10:
+            raise ValueError("Insufficient pre-treatment data (need at least 10 observations)")
+        if len(post_period_data) < 1:
+            raise ValueError("No post-treatment data found")
         
         # Get pre-treatment data for weight optimization
         pre_treatment = df[df['post'] == 0]
@@ -1090,32 +1105,80 @@ def train_causal_impact(
         from pmdarima import auto_arima
         from sklearn.metrics import r2_score
         
+        # Custom function to convert 'YYYY_WW' to datetime (e.g., first day of the week)
+        def parse_year_week(year_week_str):
+            try:
+                year, week = map(int, year_week_str.split('_'))
+                # Create a datetime object for the first day of the given week and year
+                return pd.to_datetime(f'{year}-W{week:02d}-1', format='%Y-W%W-%w')
+            except:
+                return pd.NaT
+
+        # Apply custom parsing to the date_col
+        df[date_col] = df[date_col].astype(str).apply(parse_year_week)
+        df = df.dropna(subset=[date_col])
+        
+        if df.empty:
+            raise ValueError("DataFrame is empty after processing date column. Please check your data and feature selection.")
+
+        # Infer the frequency of the date column
+        # Infer from the series *before* setting as index, as it works better
+        inferred_freq = pd.infer_freq(df[date_col])
+        if inferred_freq is None or ('W' not in inferred_freq and 'D' not in inferred_freq):
+            inferred_freq = 'W-SUN' # Default to weekly frequency, ending on Sunday
+            logger.info(f"Inferred frequency for {date_col} is not weekly/daily or could not be determined. Defaulting to {inferred_freq}")
+        else:
+            logger.info(f"Inferred frequency for {date_col}: {inferred_freq}")
+
+        # Ensure the DataFrame is indexed by date_col and has a consistent frequency
+        # The date_col is already the index when df comes from create_range_selector
+        df = df.asfreq(inferred_freq, method='ffill') # Reindex to ensure consistent frequency, filling missing dates
+
         # Check for 'post' column to define treatment period
         if "post" not in df.columns:
             # Create a default treatment period (last 30% of data)
             n_obs = len(df)
             treatment_start_idx = int(0.7 * n_obs)
-            df = df.copy()
-            df['post'] = 0
-            df.iloc[treatment_start_idx:, df.columns.get_loc('post')] = 1
-            logger.info(f"Created default treatment period starting at observation {treatment_start_idx}")
+            # Using .loc for setting values on a copy to avoid SettingWithCopyWarning
+            temp_df = df.copy()
+            temp_df['post'] = 0
+            temp_df.loc[temp_df.index[treatment_start_idx:], 'post'] = 1
+            df = temp_df # Update the main df after setting 'post'
+            logger.info(f"Created default treatment period starting at observation {df.index[treatment_start_idx]}")
         
-        # Split into pre and post periods
+        # Split into pre and post periods, ensuring DatetimeIndex and frequency are preserved
         pre_period_data = df[df['post'] == 0].copy()
         post_period_data = df[df['post'] == 1].copy()
         
+        # Explicitly set frequency for consistency after slicing/copying
+        pre_period_data = pre_period_data.asfreq(inferred_freq)
+        post_period_data = post_period_data.asfreq(inferred_freq)
+
         if len(pre_period_data) < 10:
             raise ValueError("Insufficient pre-treatment data (need at least 10 observations)")
         if len(post_period_data) < 1:
             raise ValueError("No post-treatment data found")
         
+        # Prepare pre_period_data for ARIMA: set date_col as index and ensure frequency
+        # pre_period_data has already been indexed and had frequency set above.
+        # We just need to select the target series for auto_arima.
+        pre_period_dat_indexed = pre_period_data[target]
+        
+        # The frequency was already inferred and set on the main df earlier
+        # So, the index of pre_period_dat-indexed should already have a frequency set.
+        # If for some reason it doesn't, or if it's not aligned, we can force it here.
+        if pre_period_dat_indexed.index.freq is None:
+            pre_period_dat_indexed = pre_period_dat_indexed.asfreq(inferred_freq)
+            logger.info(f"Forced frequency {inferred_freq} on pre_period_dat-indexed.")
+
         # Prepare data for modeling
         if features:
             # Use features as control variables
             pre_X = pre_period_data[features]
+            # pre_y should already have DatetimeIndex and frequency due to previous asfreq
             pre_y = pre_period_data[target]
             post_X = post_period_data[features]
-            post_y = post_period_data[target]
+            post_y = post_period_data[target] # Also ensure post_y has DatetimeIndex
             
             # Train regression model on pre-period
             from sklearn.linear_model import LinearRegression
@@ -1123,51 +1186,61 @@ def train_causal_impact(
             model.fit(pre_X, pre_y)
             
             # Generate counterfactual predictions for post-period
-            counterfactual_post = model.predict(post_X)
+            counterfactual_post = pd.Series(model.predict(post_X), index=post_period_data.index) # Keep as Series
             
             # Fit ARIMA to residuals for better modeling
-            residuals = pre_y - model.predict(pre_X)
+            # residuals should be a Series with DatetimeIndex and freq for auto_arima
+            residuals = pre_y - pd.Series(model.predict(pre_X), index=pre_y.index)
             try:
                 arima_residuals = auto_arima(residuals, seasonal=False, suppress_warnings=True)
-                residual_forecast = arima_residuals.forecast(steps=len(post_period_data))
-                counterfactual_post += residual_forecast
-            except:
-                logger.warning("ARIMA residual modeling failed, using simple regression")
+                # Forecast residuals using n_periods
+                residual_forecast_series = arima_residuals.predict(n_periods=len(post_period_data))
+                # Align counterfactual_post (Series) with residual_forecast_series (Series) for addition
+                counterfactual_post = counterfactual_post + residual_forecast_series
+            except Exception as e:
+                logger.warning(f"ARIMA residual modeling failed: {e}, using simple regression")
         else:
-            # Use ARIMA model on target variable only
-            model = auto_arima(pre_period_data[target], seasonal=False, suppress_warnings=True)
-            counterfactual_post = model.forecast(steps=len(post_period_data))
+            # Use ARIMA model on target variable only, using the indexed pre_period_data
+            # pre_period_dat_indexed (a Series) should already have DatetimeIndex and frequency
+            model = auto_arima(pre_period_dat_indexed, seasonal=False, suppress_warnings=True)
+            # Forecast counterfactual using n_periods. This should return a Series with DatetimeIndex.
+            counterfactual_post = model.predict(n_periods=len(post_period_data))
         
-        # Prevent negative predictions for count data
-        counterfactual_post = np.maximum(counterfactual_post, 0)
-        
+        # Prevent negative predictions for count data, and ensure it's a numpy array for consistency
+        counterfactual_post = np.maximum(counterfactual_post.values, 0)
+
         # Calculate treatment effects
         actual_post = post_period_data[target].values
         treatment_effects = actual_post - counterfactual_post
-        
+
         # Create full predictions DataFrame
+        # Use df.index (DatetimeIndex) for the date column in predictions DataFrame
         predictions = pd.DataFrame({
-            "date": df[date_col],
+            date_col: df.index,
             "actual": df[target],
             "prediction": np.concatenate([
                 pre_period_data[target].values,  # Use actual values for pre-period
-                counterfactual_post  # Use counterfactual for post-period
+                counterfactual_post  # Use counterfactual for post-period (now a numpy array)
             ]),
             "post": df['post']
         })
-        
+
         # Add treatment effect calculations
         predictions['treatment_effect'] = 0.0
-        predictions.loc[predictions['post'] == 1, 'treatment_effect'] = treatment_effects
-        
+        # Align treatment_effects to the post-period index
+        predictions.loc[predictions['post'] == 1, 'treatment_effect'] = (
+            post_period_data[target].values - counterfactual_post
+        )
+
         # Calculate cumulative effects
         predictions['cumulative_effect'] = predictions['treatment_effect'].cumsum()
         
         # Calculate confidence intervals (simplified approach)
         post_residuals = treatment_effects
         se = np.std(post_residuals) if len(post_residuals) > 1 else 0
-        predictions['ci_lower'] = predictions['prediction'] - 1.96 * se
-        predictions['ci_upper'] = predictions['prediction'] + 1.96 * se
+        # Ensure ci_lower and ci_upper are Series with correct index for plotting
+        post_ci_lower = pd.Series(counterfactual_post, index=post_period_data.index) - 1.96 * se
+        post_ci_upper = pd.Series(counterfactual_post, index=post_period_data.index) + 1.96 * se
         
         # Calculate summary statistics
         total_effect = np.sum(treatment_effects)
@@ -1183,7 +1256,8 @@ def train_causal_impact(
             'relative_effect': float(relative_effect),
             'p_value': 0.05,  # Simplified - would need proper Bayesian calculation
             'pre_periods': len(pre_period_data),
-            'post_periods': len(post_period_data)
+            'post_periods': len(post_period_data),
+            'inferred_frequency': inferred_freq # Add inferred frequency to summary
         }
         
         # Create visualization
@@ -1191,7 +1265,7 @@ def train_causal_impact(
         
         # Plot actual values
         fig.add_trace(go.Scatter(
-            x=df[date_col], 
+            x=df.index, # Use the DataFrame's DatetimeIndex for plotting
             y=df[target],
             mode='lines+markers',
             name='Actual',
@@ -1200,7 +1274,7 @@ def train_causal_impact(
         
         # Plot counterfactual (only for post-period)
         fig.add_trace(go.Scatter(
-            x=post_period_data[date_col],
+            x=post_period_data.index, # Use post_period_data's DatetimeIndex for plotting
             y=counterfactual_post,
             mode='lines',
             name='Counterfactual',
@@ -1209,20 +1283,17 @@ def train_causal_impact(
         
         # Add confidence interval
         if len(post_period_data) > 0:
-            post_ci_lower = counterfactual_post - 1.96 * se
-            post_ci_upper = counterfactual_post + 1.96 * se
-            
             fig.add_trace(go.Scatter(
-                x=post_period_data[date_col],
+                x=post_period_data.index, # Use post_period_data's DatetimeIndex for plotting
                 y=post_ci_lower,
                 mode='lines',
                 line=dict(width=0),
                 showlegend=False,
                 hoverinfo='skip'
             ))
-            
+
             fig.add_trace(go.Scatter(
-                x=post_period_data[date_col],
+                x=post_period_data.index, # Use post_period_data's DatetimeIndex for plotting
                 y=post_ci_upper,
                 mode='lines',
                 line=dict(width=0),
@@ -1233,10 +1304,10 @@ def train_causal_impact(
             ))
         
         # Add vertical line for treatment start
-        treatment_start_date = post_period_data[date_col].iloc[0]
+        treatment_start_date = post_period_data.index[0] # Use DatetimeIndex
         fig.add_vline(
-            x=treatment_start_date, 
-            line_dash="dot", 
+            x=treatment_start_date,
+            line_dash="dot",
             line_color="gray",
             annotation_text="Treatment Start"
         )
@@ -1479,19 +1550,12 @@ def train_chronos(
             # Handle datetime columns with proper pandas methods
             try:
                 freq = pd.infer_freq(df_sorted[date_col])
-                if freq is not None:
-                    # Use pandas date_range with inferred frequency
-                    future_dates = pd.date_range(start=last_value, periods=prediction_length + 1, freq=freq)[1:]
-                else:
-                    # Calculate most common time difference
-                    time_diffs = df_sorted[date_col].diff().dropna()
-                    if len(time_diffs) > 0:
-                        # Use the most common time difference
-                        most_common_diff = time_diffs.mode().iloc[0] if len(time_diffs.mode()) > 0 else pd.Timedelta(days=1)
-                        future_dates = [last_value + most_common_diff * (i + 1) for i in range(prediction_length)]
-                    else:
-                        # Fallback to daily frequency
-                        future_dates = pd.date_range(start=last_value, periods=prediction_length + 1, freq='D')[1:]
+                # If frequency is not inferred or not weekly, default to weekly
+                if freq is None or 'W' not in freq:
+                    freq = 'W-SUN' # Default to weekly frequency, ending on Sunday
+
+                # Use pandas date_range with inferred or default weekly frequency
+                future_dates = pd.date_range(start=last_value, periods=prediction_length + 1, freq=freq)[1:]
             except Exception as e:
                 st.warning(f"Could not generate future dates: {e}. Using sequential indices.")
                 future_dates = [f"forecast_{i+1}" for i in range(prediction_length)]
