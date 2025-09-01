@@ -102,46 +102,18 @@ def create_stationarity_tab(df: pd.DataFrame, target: str, features: List[str],
     run_key = f"{model_name}_stationarity_run"
     result_key = f"{model_name}_stationarity_result"
     
-    if st.button("Run Stationarity Analysis", key=run_key):
-        with st.spinner("Starting stationarity analysis..."):
-            # Launch background process
-            process_id = run_background_process(
-                name="Stationarity Analysis",
-                target_func=stationarity_analysis_process,
-                args=(df, target, features)
-            )
-            
-            # Store process ID in session state
-            process_state['stationarity_process'] = process_id
-            process_state['stationarity_started'] = datetime.now().isoformat()
-    
-    # Check for process results
-    if 'stationarity_process' in process_state:
-        process_id = process_state['stationarity_process']
-        
-        # Get status and display progress
-        status = get_process_status(process_id)
-        
-        if status['status'] == 'running':
-            # Show progress bar
-            st.progress(status['progress'])
-            st.write(status['message'])
-            
-            # Force rerun to update UI
-            time.sleep(0.1)
-            st.experimental_rerun()
-            
-        elif status['status'] == 'completed':
-            # Get results
-            result = get_process_result(process_id)
-            if 'result' in result:
-                st.session_state[result_key] = result['result']
-                
-                # Display results
-                display_stationarity_results(result['result'])
-        
-        elif status['status'] == 'failed':
-            st.error(f"Stationarity analysis failed: {status.get('error', 'Unknown error')}")
+    if 'stationarity_process' not in process_state:
+        st.info("Stationarity analysis will start automatically after model training.")
+        return
+
+    process_id = process_state['stationarity_process']
+    display_process_ui(
+        process_id=process_id,
+        title="Stationarity Analysis Status",
+        on_complete_callback=display_stationarity_results,
+        result_key=result_key,
+        refresh_interval=1
+    )
     
     # Display existing results if available
     if result_key in st.session_state:
@@ -212,46 +184,18 @@ def create_multicollinearity_tab(df: pd.DataFrame, target: str, features: List[s
     run_key = f"{model_name}_multicol_run"
     result_key = f"{model_name}_multicol_result"
     
-    if st.button("Run Multicollinearity Analysis", key=run_key):
-        with st.spinner("Starting multicollinearity analysis..."):
-            # Launch background process
-            process_id = run_background_process(
-                name="Multicollinearity Analysis",
-                target_func=multicollinearity_analysis_process,
-                args=(df, features)
-            )
-            
-            # Store process ID in session state
-            process_state['multicol_process'] = process_id
-            process_state['multicol_started'] = datetime.now().isoformat()
-    
-    # Check for process results
-    if 'multicol_process' in process_state:
-        process_id = process_state['multicol_process']
-        
-        # Get status and display progress
-        status = get_process_status(process_id)
-        
-        if status['status'] == 'running':
-            # Show progress bar
-            st.progress(status['progress'])
-            st.write(status['message'])
-            
-            # Force rerun to update UI
-            time.sleep(0.1)
-            st.experimental_rerun()
-            
-        elif status['status'] == 'completed':
-            # Get results
-            result = get_process_result(process_id)
-            if 'result' in result:
-                st.session_state[result_key] = result['result']
-                
-                # Display results
-                display_multicollinearity_results(result['result'])
-        
-        elif status['status'] == 'failed':
-            st.error(f"Multicollinearity analysis failed: {status.get('error', 'Unknown error')}")
+    if 'multicol_process' not in process_state:
+        st.info("Multicollinearity analysis will start automatically after model training.")
+        return
+
+    process_id = process_state['multicol_process']
+    display_process_ui(
+        process_id=process_id,
+        title="Multicollinearity Analysis Status",
+        on_complete_callback=display_multicollinearity_results,
+        result_key=result_key,
+        refresh_interval=1
+    )
     
     # Display existing results if available
     if result_key in st.session_state:
@@ -342,46 +286,18 @@ def create_autocorrelation_tab(df: pd.DataFrame, target: str, features: List[str
     run_key = f"{model_name}_autocorr_run"
     result_key = f"{model_name}_autocorr_result"
     
-    if st.button("Run Autocorrelation Analysis", key=run_key):
-        with st.spinner("Starting autocorrelation analysis..."):
-            # Launch background process
-            process_id = run_background_process(
-                name="Autocorrelation Analysis",
-                target_func=autocorrelation_analysis_process,
-                args=(df, target, features)
-            )
-            
-            # Store process ID in session state
-            process_state['autocorr_process'] = process_id
-            process_state['autocorr_started'] = datetime.now().isoformat()
-    
-    # Check for process results
-    if 'autocorr_process' in process_state:
-        process_id = process_state['autocorr_process']
-        
-        # Get status and display progress
-        status = get_process_status(process_id)
-        
-        if status['status'] == 'running':
-            # Show progress bar
-            st.progress(status['progress'])
-            st.write(status['message'])
-            
-            # Force rerun to update UI
-            time.sleep(0.1)
-            st.experimental_rerun()
-            
-        elif status['status'] == 'completed':
-            # Get results
-            result = get_process_result(process_id)
-            if 'result' in result:
-                st.session_state[result_key] = result['result']
-                
-                # Display results
-                display_autocorrelation_results(result['result'])
-        
-        elif status['status'] == 'failed':
-            st.error(f"Autocorrelation analysis failed: {status.get('error', 'Unknown error')}")
+    if 'autocorr_process' not in process_state:
+        st.info("Autocorrelation analysis will start automatically after model training.")
+        return
+
+    process_id = process_state['autocorr_process']
+    display_process_ui(
+        process_id=process_id,
+        title="Autocorrelation Analysis Status",
+        on_complete_callback=display_autocorrelation_results,
+        result_key=result_key,
+        refresh_interval=1
+    )
     
     # Display existing results if available
     if result_key in st.session_state:
@@ -462,46 +378,18 @@ def create_optimal_model_tab(df: pd.DataFrame, target: str, features: List[str],
     run_key = f"{model_name}_optimal_run"
     result_key = f"{model_name}_optimal_result"
     
-    if st.button("Run Optimal Model Selection", key=run_key):
-        with st.spinner("Starting model selection process..."):
-            # Launch background process
-            process_id = run_background_process(
-                name="Optimal Model Selection",
-                target_func=optimal_model_selection_process,
-                args=(df, target, features)
-            )
-            
-            # Store process ID in session state
-            process_state['optimal_process'] = process_id
-            process_state['optimal_started'] = datetime.now().isoformat()
-    
-    # Check for process results
-    if 'optimal_process' in process_state:
-        process_id = process_state['optimal_process']
-        
-        # Get status and display progress
-        status = get_process_status(process_id)
-        
-        if status['status'] == 'running':
-            # Show progress bar
-            st.progress(status['progress'])
-            st.write(status['message'])
-            
-            # Force rerun to update UI
-            time.sleep(0.1)
-            st.experimental_rerun()
-            
-        elif status['status'] == 'completed':
-            # Get results
-            result = get_process_result(process_id)
-            if 'result' in result:
-                st.session_state[result_key] = result['result']
-                
-                # Display results
-                display_optimal_model_results(result['result'])
-        
-        elif status['status'] == 'failed':
-            st.error(f"Optimal model selection failed: {status.get('error', 'Unknown error')}")
+    if 'optimal_process' not in process_state:
+        st.info("Optimal model selection will start automatically after model training.")
+        return
+
+    process_id = process_state['optimal_process']
+    display_process_ui(
+        process_id=process_id,
+        title="Optimal Model Selection Status",
+        on_complete_callback=display_optimal_model_results,
+        result_key=result_key,
+        refresh_interval=1
+    )
     
     # Display existing results if available
     if result_key in st.session_state:
@@ -530,7 +418,34 @@ def display_optimal_model_results(result: Dict[str, Any]) -> None:
         }
         
         st.info(model_descriptions.get(suggested_model, "Custom model configuration"))
-    
+
+        # Add a button to apply the optimal model
+        if st.button(f"🚀 Apply {suggested_model} Model", key=f"apply_optimal_model_button_{model_name}"):
+            # Store the optimal model suggestions in session state
+            st.session_state['optimal_model_applied'] = True
+            st.session_state['applied_optimal_model_name'] = suggested_model
+            
+            # Retrieve optimized feature set from multicollinearity analysis if available
+            multicol_result_key = f"{model_name}_multicol_result"
+            if multicol_result_key in st.session_state:
+                multicol_results = st.session_state[multicol_result_key]
+                if 'vif_analysis' in multicol_results and 'optimized_feature_set' in multicol_results['vif_analysis']:
+                    st.session_state['applied_optimal_features'] = multicol_results['vif_analysis']['optimized_feature_set']
+                else:
+                    st.session_state['applied_optimal_features'] = features # Fallback to original if no optimization
+            else:
+                st.session_state['applied_optimal_features'] = features # Fallback to original if no multicol analysis yet
+            
+            # Store optimal model result for comparison
+            if result.get('best_model') and result.get('models', {}).get(result['best_model']):
+                best_model_data = result['models'][result['best_model']]
+                st.session_state['optimal_model_data'] = best_model_data
+                st.session_state['optimal_model_features'] = features  # Store the features used by the optimal model
+                st.info(f"Optimal model data stored for comparison: {result['best_model']}")
+            
+            # Trigger a rerun to apply the new model
+            st.experimental_rerun()
+
     # Display model comparison
     if 'model_comparison' in result:
         st.markdown("### Model Comparison")

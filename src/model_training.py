@@ -118,8 +118,8 @@ def train_mlr(
                     model_features.append(centered_var)
             
             # Add time period indicator as main effect
-            if 'time_period' in df_processed.columns:
-                model_features.append('time_period')
+            # if 'time_period' in df_processed.columns:
+            #     model_features.append('time_period')
             
             # Use statsmodels for better statistical analysis
             import statsmodels.api as sm
@@ -155,8 +155,15 @@ def train_mlr(
             
             # Check for perfect multicollinearity by examining the condition number
             try:
+                lagged_data = df_processed.copy()
+                lagged_data['lagged_target'] = lagged_data[target].shift(1).fillna(0)
+                lagged_data = lagged_data.dropna()
+
+                X_lagged = sm.add_constant(lagged_data[model_features + ['lagged_target']])
+                y_lagged = lagged_data[target]
+
                 # Fit model
-                model = sm.OLS(y, X).fit()
+                model = sm.OLS(y_lagged, X_lagged).fit(cov_type='HAC', cov_kwds={'maxlags':1})
                 
                 # Check if model has perfect multicollinearity
                 if hasattr(model, 'condition_number') and model.condition_number > 1e15:
@@ -168,7 +175,7 @@ def train_mlr(
                         logger.info(f"Removing variable due to perfect multicollinearity: {removed_var}")
                         X = df_processed[model_features]
                         X = sm.add_constant(X)
-                        model = sm.OLS(y, X).fit()
+                        model = sm.OLS(y, X).fit(cov_type='HAC', cov_kwds={'maxlags':1})
                 
             except Exception as e:
                 logger.error(f"Error fitting model: {e}")
@@ -179,7 +186,7 @@ def train_mlr(
                     reduced_features = model_features[:2]
                     X = df_processed[reduced_features]
                     X = sm.add_constant(X)
-                    model = sm.OLS(y, X).fit()
+                    model = sm.OLS(y, X).fit(cov_type='HAC', cov_kwds={'maxlags':1})
                 else:
                     raise e
             
@@ -1832,12 +1839,12 @@ def validate_parallel_trends(
         control_trend = sm.OLS(
             control_data[outcome_col],
             sm.add_constant(control_data['time_numeric'])
-        ).fit()
+        ).fit(cov_type='HAC', cov_kwds={'maxlags':1})
         
         treatment_trend = sm.OLS(
             treatment_data[outcome_col],
             sm.add_constant(treatment_data['time_numeric'])
-        ).fit()
+        ).fit(cov_type='HAC', cov_kwds={'maxlags':1})
         
         # Calculate slope difference
         control_slope = control_trend.params.iloc[1] if len(control_trend.params) > 1 else 0

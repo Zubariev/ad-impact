@@ -17,6 +17,7 @@ import pandas as pd
 import streamlit as st
 import numpy as np
 import threading
+import time # Added for waiting for background processes
 
 # Add src directory to Python path for imports
 current_dir = Path(__file__).parent
@@ -32,7 +33,7 @@ from config import (
     MIN_OBSERVATIONS_FOR_TRAINING,
 )
 from mlr_enhancements import create_mlr_enhancement_ui
-from background_processes import render_background_process_ui
+from background_processes import render_background_process_ui, get_process_status, get_process_result
 
 from data_utils import (
     detect_column_type,
@@ -56,6 +57,7 @@ from seasonal_decomposition import (
     create_decomposition_ui,
     display_decomposition_info
 )
+from src.data_analysis import analyze_client_specific_effects
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -657,6 +659,105 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
                 # Pass the correct variable names that are defined in this scope
                 create_mlr_enhancement_ui(df_for_training, target, features, model_name)
             
+            # After model training and MLR enhancements, trigger background analyses
+            # These will be monitored and displayed in the MLR Enhancements tabs
+            try:
+                from background_processes import run_background_process, stationarity_analysis_process, \
+                                       multicollinearity_analysis_process, autocorrelation_analysis_process, \
+                                       optimal_model_selection_process
+                
+                # Initialize session state for process tracking if not already present
+                if f"{model_name}_processes" not in st.session_state:
+                    st.session_state[f"{model_name}_processes"] = {}
+                process_state = st.session_state[f"{model_name}_processes"]
+
+                st.info("Starting background analyses for MLR Enhancements (Stationarity, Multicollinearity, Autocorrelation, Optimal Model)...")
+
+                # Run Stationarity Analysis in background
+                stationarity_process_id = run_background_process(
+                    name=f"{model_name} Stationarity Analysis",
+                    target_func=stationarity_analysis_process,
+                    args=(df_for_training.copy(), target, features)
+                )
+                process_state['stationarity_process'] = stationarity_process_id
+
+                # Run Multicollinearity Analysis in background
+                multicollinearity_process_id = run_background_process(
+                    name=f"{model_name} Multicollinearity Analysis",
+                    target_func=multicollinearity_analysis_process,
+                    args=(df_for_training.copy(), features)
+                )
+                process_state['multicol_process'] = multicollinearity_process_id
+
+                # Run Autocorrelation Analysis in background
+                autocorrelation_process_id = run_background_process(
+                    name=f"{model_name} Autocorrelation Analysis",
+                    target_func=autocorrelation_analysis_process,
+                    args=(df_for_training.copy(), target, features)
+                )
+                process_state['autocorr_process'] = autocorrelation_process_id
+
+                # Run Optimal Model Selection in background
+                optimal_model_process_id = run_background_process(
+                    name=f"{model_name} Optimal Model Selection",
+                    target_func=optimal_model_selection_process,
+                    kwargs={
+                        "data": df_for_training.copy(), 
+                        "target": target, 
+                        "features": features, 
+                        "date_col": date_col, 
+                        "use_decomposition": use_decomposition, 
+                        "decomposition_method": decomposition_method, 
+                        "decomposition_period": decomposition_period
+                    }
+                )
+                process_state['optimal_process'] = optimal_model_process_id
+
+                st.success("Background analyses initiated successfully. Check 'Advanced MLR Analytics' tab for progress and results.")
+
+                # Wait for optimal model process to complete and update session state
+                if model_name == "MLR": # Only for MLR as optimal model selection is currently for MLR
+                    with st.spinner("Waiting for Optimal Model Selection to complete..."):
+                        while get_process_status(optimal_model_process_id)['status'] == "running":
+                            time.sleep(1) # Wait for 1 second before checking again
+                        
+                        optimal_result = get_process_result(optimal_model_process_id)
+                        
+                        if optimal_result and optimal_result.get('status') == "completed":
+                            optimal_model_data_raw = optimal_result.get('result', {})
+                            
+                            if optimal_model_data_raw and optimal_model_data_raw.get('best_model') and optimal_model_data_raw.get('models', {}).get(optimal_model_data_raw['best_model']):
+                                best_model_name_from_analysis = optimal_model_data_raw['best_model']
+                                best_model_data = optimal_model_data_raw['models'][best_model_name_from_analysis]
+                                
+                                st.session_state['optimal_model_applied'] = True
+                                st.session_state['applied_optimal_model_name'] = best_model_name_from_analysis
+                                st.session_state['optimal_model_data'] = best_model_data
+                                
+                                # Retrieve optimized feature set from multicollinearity analysis if available
+                                multicol_process_id = process_state['multicol_process']
+                                multicol_result = get_process_result(multicol_process_id)
+                                
+                                if multicol_result and multicol_result.get('status') == "completed":
+                                    multicol_data = multicol_result.get('result', {})
+                                    if 'vif_analysis' in multicol_data and 'optimized_feature_set' in multicol_data['vif_analysis']:
+                                        st.session_state['applied_optimal_features'] = multicol_data['vif_analysis']['optimized_feature_set']
+                                    else:
+                                        st.session_state['applied_optimal_features'] = features # Fallback to original if no optimization
+                                else:
+                                    st.session_state['applied_optimal_features'] = features # Fallback to original if no multicol analysis yet
+
+                                st.success(f"Optimal Model {best_model_name_from_analysis} identified and applied in session state.")
+                            else:
+                                st.warning("Optimal model selection results not found or incomplete.")
+                        else:
+                            st.warning("Optimal model selection background process did not complete successfully.")
+                
+            except ImportError as ie:
+                st.warning(f"Could not import background process functions. Ensure src/background_processes.py is available. Error: {ie}")
+            except Exception as analysis_e:
+                st.error(f"Error initiating background analyses: {analysis_e}")
+            
             # Display model-specific visualizations
             if model_name == "DiD":
                 # Display comprehensive DiD visualizations
@@ -834,7 +935,12 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
                         except:
                             st.info("📝 Report generation failed, but all analysis is visible in the UI above.")
             
-            # Display model metrics and interpretation hints
+            # Store the current model and predictions for comparison
+            st.session_state[f'default_model_{model_name}'] = model
+            st.session_state[f'default_predictions_{model_name}'] = predictions
+            
+            # Display model metrics and interpretation hints for the default model
+            st.markdown("### Default Model Results")
             display_model_metrics(
                 model_name,
                 df=df,
@@ -843,6 +949,161 @@ def train_model_safely(model_name: str, df: pd.DataFrame, date_col: str, target:
                 model=model,
                 predictions=predictions,
             )
+            
+            # Check if we have optimal model data to display for comparison
+            if model_name == "MLR" and st.session_state.get('optimal_model_data') is not None:
+                st.markdown("---")
+                st.markdown("## 🚀 Optimal Model Comparison")
+                
+                # Display the optimal model type
+                optimal_model_name = st.session_state.get('applied_optimal_model_name', 'Unknown')
+                st.info(f"Comparing default MLR model with optimal model type: **{optimal_model_name}**")
+                
+                # Get optimal model data
+                optimal_model_data = st.session_state.get('optimal_model_data', {})
+                
+                # Create a comparison section
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("### Default MLR Model")
+                    if hasattr(model, 'rsquared'):
+                        st.metric("R-squared", f"{model.rsquared:.4f}")
+                    if hasattr(model, 'rsquared_adj'):
+                        st.metric("Adjusted R-squared", f"{model.rsquared_adj:.4f}")
+                    if hasattr(model, 'aic'):
+                        st.metric("AIC", f"{model.aic:.4f}")
+                
+                with col2:
+                    st.markdown(f"### Optimal {optimal_model_name} Model")
+                    if 'r_squared' in optimal_model_data:
+                        st.metric("R-squared", f"{optimal_model_data['r_squared']:.4f}")
+                    if 'adj_r_squared' in optimal_model_data:
+                        st.metric("Adjusted R-squared", f"{optimal_model_data['adj_r_squared']:.4f}")
+                    if 'aic' in optimal_model_data:
+                        st.metric("AIC", f"{optimal_model_data['aic']:.4f}")
+                
+                # Display coefficients comparison if available
+                if 'coefficients' in optimal_model_data:
+                    st.markdown("### Coefficients Comparison")
+                    
+                    # Create comparison dataframe
+                    comparison_data = []
+                    
+                    # Get default model coefficients
+                    default_coefs = {}
+                    if hasattr(model, 'params'):
+                        default_coefs = {name: float(coef) for name, coef in zip(['const'] + features, model.params)}
+                    
+                    # Get default model client-specific effects
+                    default_analysis = analyze_client_specific_effects(model, df, target, client_specific_vars)
+                    default_coefs_raw = {effect["original_variable"]: effect["coefficient"] for effect in default_analysis.get("client_specific_effects", {}).values()}
+                    
+                    # The `default_coefs_raw` contains original variable names as keys, 
+                    # but the `client_comparison` loop expects interaction terms.
+                    # Let's adjust `default_coefs` to map original var to coefficient
+                    default_coefs = default_coefs_raw
+
+                    # Get optimal model coefficients from the optimal_model_data_raw
+                    optimal_coefs = {}
+                    if optimal_model_data_raw:
+                        best_model_name = optimal_model_data_raw.get('best_model')
+                        if best_model_name:
+                            model_details = optimal_model_data_raw.get('models', {}).get(best_model_name, {})
+                            optimal_model_coefficients = model_details.get('coefficients', {})
+                            
+                            for var in client_specific_vars:
+                                interaction_term = f"{var}_x_time_period"
+                                if interaction_term in optimal_model_coefficients:
+                                    optimal_coefs[var] = optimal_model_coefficients[interaction_term]
+                    
+                    # Combine all variable names
+                    all_vars = set(list(default_coefs.keys()) + list(optimal_coefs.keys()))
+                    
+                    for var in all_vars:
+                        comparison_data.append({
+                            'Variable': var,
+                            'Default Model': f"{default_coefs.get(var, 'N/A'):.4f}" if var in default_coefs else "N/A",
+                            'Optimal Model': f"{optimal_coefs.get(var, 'N/A'):.4f}" if var in optimal_coefs else "N/A",
+                            'Difference': f"{(optimal_coefs.get(var, 0) - default_coefs.get(var, 0)):.4f}" if var in optimal_coefs and var in default_coefs else "N/A"
+                        })
+                    
+                    # Display as dataframe
+                    st.dataframe(pd.DataFrame(comparison_data), use_container_width=True)
+                    
+                    # Add interpretation
+                    st.markdown("### Interpretation of Optimal Model")
+                    st.markdown(f"""
+                    The optimal model ({optimal_model_name}) addresses issues detected in the default MLR model:
+                    
+                    - **Multicollinearity**: {optimal_model_name} helps reduce the impact of correlated features
+                    - **Stability**: Coefficients in the optimal model are more stable and reliable
+                    - **Generalization**: The optimal model is likely to perform better on new data
+                    """)
+                    
+                    # Display client-specific effects for optimal model if this is an MLR model
+                    if model_name == "MLR" and hasattr(model, 'client_specific_vars') and model.client_specific_vars:
+                        st.markdown("### Optimal Model Client-Specific Effects")
+                        
+                        # Since we don't have the actual optimal model object, we'll show a comparison table
+                        # of the coefficients for client-specific variables
+                        client_specific_vars = model.client_specific_vars
+                        client_comparison = []
+                        
+                        for var in client_specific_vars:
+                            if var in default_coefs and var in optimal_coefs:
+                                default_val = default_coefs.get(var, 0)
+                                optimal_val = optimal_coefs.get(var, 0)
+                                
+                                # Determine effect direction
+                                default_direction = "Positive" if default_val > 0 else "Negative"
+                                optimal_direction = "Positive" if optimal_val > 0 else "Negative"
+                                
+                                # Determine if direction changed
+                                direction_changed = default_direction != optimal_direction
+                                
+                                client_comparison.append({
+                                    'Channel': var,
+                                    'Default Coefficient': f"{default_val:.4f}",
+                                    'Optimal Coefficient': f"{optimal_val:.4f}",
+                                    'Default Effect': default_direction,
+                                    'Optimal Effect': optimal_direction,
+                                    'Direction Changed': "Yes" if direction_changed else "No"
+                                })
+                        
+                        if client_comparison:
+                            st.dataframe(pd.DataFrame(client_comparison), use_container_width=True)
+                            
+                            # Add business insights
+                            st.markdown("### 💼 Business Insights from Optimal Model")
+                            
+                            # Count channels with positive/negative effects
+                            positive_channels = sum(1 for item in client_comparison if item['Optimal Effect'] == "Positive")
+                            negative_channels = sum(1 for item in client_comparison if item['Optimal Effect'] == "Negative")
+                            changed_channels = sum(1 for item in client_comparison if item['Direction Changed'] == "Yes")
+                            
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Effective Channels", positive_channels)
+                            with col2:
+                                st.metric("Ineffective Channels", negative_channels)
+                            with col3:
+                                st.metric("Changed Direction", changed_channels)
+                            
+                            if changed_channels > 0:
+                                st.warning(f"⚠️ {changed_channels} channels changed direction in the optimal model. This suggests the default model may have been affected by multicollinearity or other issues.")
+                            
+                            # Add recommendations based on optimal model
+                            st.markdown("### Recommendations")
+                            st.info("✅ The optimal model provides more reliable coefficient estimates and should be used for business decisions.")
+                            
+                            if positive_channels > 0:
+                                st.success(f"✅ Focus investments on the {positive_channels} channels with positive effects in the optimal model.")
+                            
+                            if negative_channels > 0:
+                                st.warning(f"⚠️ Review strategy for the {negative_channels} channels with negative effects in the optimal model.")
+                        else:
+                            st.info("No client-specific variables found in both models for comparison.")
             
             # MULTICOLLINEARITY ANALYSIS (now integrated into JSON report above)
             # Note: Comprehensive multicollinearity analysis is now integrated directly into the JSON report
@@ -1166,188 +1427,225 @@ def main():
         with tab:
             st.header(f"{model_name} Model")
             
-            if not st.session_state['df'].empty:
-                df = st.session_state['df']
-                try:
-                    # Column selection
-                    range_col = st.selectbox(
-                        "Select Range Column (for filtering observations)",
-                        options=df.columns,
-                        help="Select a column to filter the range of observations for training",
-                        key=f"range_{model_name}",
-                    )
-                    
-                    target_var = st.selectbox(
-                        "Target Variable",
-                        options=[c for c in df.columns if c != range_col],
-                        key=f"target_{model_name}",
-                    )
-                    
-                    # Client-specific advertising variables selection
-                    st.subheader(" Client-Specific Advertising Variables")
-                    st.info("Select variables that represent the client's specific advertising investments. These will be isolated from general market effects in the analysis.")
-                    
-                    client_specific_vars = st.multiselect(
-                        "Client-Specific Advertising Variables",
-                        options=[c for c in df.columns if c not in {range_col, target_var}],
-                        key=f"client_specific_{model_name}",
-                        help="These variables represent advertising investments made directly by the client being analyzed. They will be treated as interaction terms with time periods to isolate client-specific effects from general market trends."
-                    )
-                    
-                    # Other feature variables selection
-                    st.subheader("Other Feature Variables")
-                    st.info("Select general market variables and other features that affect all entities in the market.")
-                    
-                    other_feature_vars = st.multiselect(
-                        "Other Feature Variables",
-                        options=[c for c in df.columns if c not in {range_col, target_var} and c not in client_specific_vars],
-                        key=f"other_features_{model_name}",
-                        help="These variables represent general market conditions, competitor activities, and other factors that affect all entities in the market."
-                    )
-                    
-                    # Combine all feature variables
-                    feature_vars = client_specific_vars + other_feature_vars
+            df = st.session_state['df']
+            
+            # Initialize variables that will be used for training
+            current_model_to_train = model_name
+            current_target_var = None
+            current_range_col = None
+            current_client_specific_vars = []
+            current_other_feature_vars = []
+            current_feature_vars = []
 
-                    # Feature limit validation - now non-blocking
-                    feature_limits_ok = enforce_feature_limits(model_name, feature_vars)
-                    
-                    if feature_limits_ok:
-                        # Range selection
-                        try:
-                            df_filtered = create_range_selector(df, range_col, model_name)
-                            
-                            # Validate filtered data
-                            if df_filtered is not None and not df_filtered.empty:
-                                st.success(f"Selected {len(df_filtered)} observations out of {len(df)} total.")
+            # Check if an optimal model was applied
+            if st.session_state.get('optimal_model_applied', False) and model_name == st.session_state.get('applied_optimal_model_name'):
+                st.info(f"Applying optimal model: {st.session_state['applied_optimal_model_name']} with optimized features.")
+                current_model_to_train = st.session_state['applied_optimal_model_name']
+                current_target_var = st.session_state.get('target_var') # Get previously selected target
+                # Ensure target_var is not in the optimized features if it was included
+                current_feature_vars = [f for f in st.session_state['applied_optimal_features'] if f != current_target_var]
+                
+                # For optimal model, client_specific_vars and other_feature_vars are derived from current_feature_vars
+                current_client_specific_vars = [f for f in current_feature_vars if f in st.session_state.get(f"client_specific_vars_{model_name}", [])]
+                current_other_feature_vars = [f for f in current_feature_vars if f not in current_client_specific_vars]
 
-                                # Show descriptive statistics
-                                if feature_vars:
-                                    display_descriptive_stats(df_filtered, range_col, target_var, feature_vars)
+                st.warning(f"Using optimized features: {current_feature_vars}")
+                st.session_state['optimal_model_applied'] = False # Reset the flag after applying
+            else:
+                # Default behavior: use user selections for the current tab
+                # These will be updated by the selectbox/multiselect widgets below
+                pass
+            
+            try:
+                # Column selection
+                range_col_options = df.columns.tolist()
+                current_range_col = st.selectbox(
+                    "Select Range Column (for filtering observations)",
+                    options=range_col_options,
+                    index=range_col_options.index(current_range_col) if current_range_col and current_range_col in range_col_options else 0,
+                    help="Select a column to filter the range of observations for training",
+                    key=f"range_{model_name}",
+                )
+                
+                target_var_options = [c for c in df.columns if c != current_range_col]
+                current_target_var = st.selectbox(
+                    "Target Variable",
+                    options=target_var_options,
+                    index=target_var_options.index(current_target_var) if current_target_var and current_target_var in target_var_options else 0,
+                    key=f"target_{model_name}",
+                )
+                # Always store the current target_var in session state for future optimal model applications
+                st.session_state['target_var'] = current_target_var
+                
+                # Client-specific advertising variables selection
+                st.subheader(" Client-Specific Advertising Variables")
+                st.info("Select variables that represent the client's specific advertising investments. These will be isolated from general market effects in the analysis.")
+                
+                client_specific_options = [c for c in df.columns if c not in {current_range_col, current_target_var}]
+                current_client_specific_vars = st.multiselect(
+                    "Client-Specific Advertising Variables",
+                    options=client_specific_options,
+                    default=current_client_specific_vars if current_client_specific_vars else [],
+                    key=f"client_specific_{model_name}",
+                    help="These variables represent advertising investments made directly by the client being analyzed. They will be treated as interaction terms with time periods to isolate client-specific effects from general market trends."
+                )
+                
+                # Other feature variables selection
+                st.subheader("Other Feature Variables")
+                st.info("Select general market variables and other features that affect all entities in the market.")
+                
+                other_feature_options = [c for c in df.columns if c not in {current_range_col, current_target_var} and c not in current_client_specific_vars]
+                current_other_feature_vars = st.multiselect(
+                    "Other Feature Variables",
+                    options=other_feature_options,
+                    default=current_other_feature_vars if current_other_feature_vars else [],
+                    key=f"other_features_{model_name}",
+                    help="These variables represent general market conditions, competitor activities, and other factors that affect all entities in the market."
+                )
+                
+                # Combine all feature variables for training
+                current_feature_vars = current_client_specific_vars + current_other_feature_vars
 
-                                    # Handle missing data
-                                    df_for_training = handle_missing_data_ui(df_filtered, target_var, feature_vars, model_name)
-                                    
-                                    # Validate data for training (now with model-specific checks)
-                                    training_data_ok = validate_data_for_training(df_for_training, target_var, feature_vars, model_name)
-                                    
-                                    if training_data_ok:
-                                        # Chronos-specific settings
-                                        prediction_length = None
-                                        test_percentage = None
-                                        if model_name == "Chronos T5 Large":
-                                            st.markdown("---")
-                                            st.subheader("Forecast Settings")
-                                            
-                                            # Test data percentage input
-                                            col1, col2 = st.columns([2, 1])
-                                            with col1:
-                                                test_percentage = st.slider(
-                                                    "Percent of Dataset for Test Data (%)",
-                                                    min_value=5,
-                                                    max_value=50,
-                                                    value=20,
-                                                    step=5,
-                                                    key=f"test_pct_{model_name}",
-                                                    help="Select what percentage of your data to use for testing/validation. The rest will be used as context for forecasting."
-                                                )
-                                            with col2:
-                                                train_size = int((100 - test_percentage) / 100 * len(df_for_training))
-                                                test_size = len(df_for_training) - train_size
-                                                st.metric("Train Data", f"{train_size} points")
-                                                st.metric("Test Data", f"{test_size} points")
-                                            
-                                            # Prediction length input
-                                            st.markdown("**Future Forecasting:**")
-                                            col3, col4 = st.columns([2, 1])
-                                            with col3:
-                                                # Calculate default prediction length for guidance
-                                                default_pred_length = min(12, len(df_for_training) // 4)
-                                                default_pred_length = max(1, default_pred_length)
-                                                
-                                                prediction_length = st.number_input(
-                                                    "Number of Future Points to Forecast",
-                                                    min_value=1,
-                                                    max_value=min(100, len(df_for_training)),
-                                                    value=default_pred_length,
-                                                    step=1,
-                                                    key=f"pred_length_{model_name}",
-                                                    help=f"Specify how many future points to forecast beyond your historical data. Maximum: {min(100, len(df_for_training))}"
-                                                )
-                                            with col4:
-                                                st.metric("Total Data Points", len(df_for_training))
-                                                st.metric("Future Forecasts", prediction_length)
-                                            
-                                            # Summary information
-                                            st.info(f"**Setup Summary**: Using {train_size} points for training context, {test_size} points for validation, forecasting {prediction_length} future points")
-                                            
-                                            if test_size < 2:
-                                                st.warning(f"Test size is very small ({test_size} points). Consider using a larger test percentage for better validation.")
-                                        
-                                        # Seasonal decomposition section
+                # Feature limit validation - now non-blocking
+                feature_limits_ok = enforce_feature_limits(current_model_to_train, current_feature_vars)
+                
+                if feature_limits_ok:
+                    # Range selection
+                    try:
+                        df_filtered = create_range_selector(df, current_range_col, current_model_to_train)
+                        
+                        # Validate filtered data
+                        if df_filtered is not None and not df_filtered.empty:
+                            st.success(f"Selected {len(df_filtered)} observations out of {len(df)} total.")
+
+                            # Show descriptive statistics
+                            if current_feature_vars:
+                                display_descriptive_stats(df_filtered, current_range_col, current_target_var, current_feature_vars)
+
+                                # Handle missing data
+                                df_for_training = handle_missing_data_ui(df_filtered, current_target_var, current_feature_vars, current_model_to_train)
+                                
+                                # Validate data for training (now with model-specific checks)
+                                training_data_ok = validate_data_for_training(df_for_training, current_target_var, current_feature_vars, current_model_to_train)
+                                
+                                if training_data_ok:
+                                    # Chronos-specific settings
+                                    prediction_length = None
+                                    test_percentage = None
+                                    if current_model_to_train == "Chronos T5 Large":
                                         st.markdown("---")
-                                        st.subheader("Seasonal Decomposition (Optional)")
-                                        st.info("Apply seasonal decomposition to improve model performance by removing seasonal patterns from the target variable.")
+                                        st.subheader("Forecast Settings")
                                         
-                                        use_decomposition = st.checkbox(
-                                            "Apply Seasonal Decomposition",
-                                            value=False,
-                                            key=f"use_decomposition_{model_name}",
-                                            help="Decompose target variable into trend, seasonal, and residual components. Model will be trained on the non-seasonal component."
-                                        )
+                                        # Test data percentage input
+                                        col1, col2 = st.columns([2, 1])
+                                        with col1:
+                                            test_percentage = st.slider(
+                                                "Percent of Dataset for Test Data (%)",
+                                                min_value=5,
+                                                max_value=50,
+                                                value=20,
+                                                step=5,
+                                                key=f"test_pct_{current_model_to_train}",
+                                                help="Select what percentage of your data to use for testing/validation. The rest will be used as context for forecasting."
+                                            )
+                                        with col2:
+                                            train_size = int((100 - test_percentage) / 100 * len(df_for_training))
+                                            test_size = len(df_for_training) - train_size
+                                            st.metric("Train Data", f"{train_size} points")
+                                            st.metric("Test Data", f"{test_size} points")
                                         
-                                        decomposition_method = 'STL'
-                                        decomposition_period = None
+                                        # Prediction length input
+                                        st.markdown("**Future Forecasting:**")
+                                        col3, col4 = st.columns([2, 1])
+                                        with col3:
+                                            # Calculate default prediction length for guidance
+                                            default_pred_length = min(12, len(df_for_training) // 4)
+                                            default_pred_length = max(1, default_pred_length)
+                                            
+                                            prediction_length = st.number_input(
+                                                "Number of Future Points to Forecast",
+                                                min_value=1,
+                                                max_value=min(100, len(df_for_training)),
+                                                value=default_pred_length,
+                                                step=1,
+                                                key=f"pred_length_{current_model_to_train}",
+                                                help=f"Specify how many future points to forecast beyond your historical data. Maximum: {min(100, len(df_for_training))}"
+                                            )
+                                        with col4:
+                                            st.metric("Total Data Points", len(df_for_training))
+                                            st.metric("Future Forecasts", prediction_length)
                                         
-                                        if use_decomposition:
-                                            decomposition_method, decomposition_period = create_decomposition_ui(model_name)
+                                        # Summary information
+                                        st.info(f"**Setup Summary**: Using {train_size} points for training context, {test_size} points for validation, forecasting {prediction_length} future points")
                                         
-                                        # Show Apply button only if data is ready
-                                        if len(df_for_training) >= 5:
-                                            if st.button("Apply & Train Model", key=f"apply_{model_name}", type="primary"):
-                                                # Store client-specific variables in session state for MLR model
-                                                if model_name == "MLR":
-                                                    st.session_state[f"client_specific_vars_{model_name}"] = client_specific_vars
-                                                    st.session_state[f"other_feature_vars_{model_name}"] = other_feature_vars
-                                                
-                                                # Get client-specific variables from session state for MLR
-                                                client_specific_vars = None
-                                                other_feature_vars = None
-                                                if model_name == "MLR":
-                                                    client_specific_vars = st.session_state.get(f"client_specific_vars_{model_name}", [])
-                                                    other_feature_vars = st.session_state.get(f"other_feature_vars_{model_name}", [])
-                                                
-                                                train_model_safely(
-                                                    model_name, 
-                                                    df_for_training, 
-                                                    range_col, 
-                                                    target_var, 
-                                                    feature_vars, 
-                                                    prediction_length, 
-                                                    test_percentage, 
-                                                    client_specific_vars, 
-                                                    other_feature_vars,
-                                                    use_decomposition,
-                                                    decomposition_method,
-                                                    decomposition_period
-                                                )
-                                        else:
-                                            st.warning("Need at least 5 observations for training after data processing.")
+                                        if test_size < 2:
+                                            st.warning(f"Test size is very small ({test_size} points). Consider using a larger test percentage for better validation.")
+                                    
+                                    # Seasonal decomposition section
+                                    st.markdown("---")
+                                    st.subheader("Seasonal Decomposition (Optional)")
+                                    st.info("Apply seasonal decomposition to improve model performance by removing seasonal patterns from the target variable.")
+                                    
+                                    use_decomposition = st.checkbox(
+                                        "Apply Seasonal Decomposition",
+                                        value=False,
+                                        key=f"use_decomposition_{current_model_to_train}",
+                                        help="Decompose target variable into trend, seasonal, and residual components. Model will be trained on the non-seasonal component."
+                                    )
+                                    
+                                    decomposition_method = 'STL'
+                                    decomposition_period = None
+                                    
+                                    if use_decomposition:
+                                        decomposition_method, decomposition_period = create_decomposition_ui(current_model_to_train)
+                                    
+                                    # Show Apply button only if data is ready
+                                    if len(df_for_training) >= 5:
+                                        if st.button("Apply & Train Model", key=f"apply_{current_model_to_train}", type="primary"):
+                                            # Store client-specific variables in session state for MLR model
+                                            if current_model_to_train == "MLR":
+                                                st.session_state[f"client_specific_vars_{current_model_to_train}"] = current_client_specific_vars
+                                                st.session_state[f"other_feature_vars_{current_model_to_train}"] = current_other_feature_vars
+                                            
+                                            # Get client-specific variables from session state for MLR
+                                            client_specific_vars_for_training = None
+                                            other_feature_vars_for_training = None
+                                            if current_model_to_train == "MLR":
+                                                client_specific_vars_for_training = st.session_state.get(f"client_specific_vars_{current_model_to_train}", [])
+                                                other_feature_vars_for_training = st.session_state.get(f"other_feature_vars_{current_model_to_train}", [])
+                                            
+                                            train_model_safely(
+                                                current_model_to_train, 
+                                                df_for_training, 
+                                                current_range_col, 
+                                                current_target_var, 
+                                                current_feature_vars, 
+                                                prediction_length, 
+                                                test_percentage, 
+                                                client_specific_vars_for_training, 
+                                                other_feature_vars_for_training,
+                                                use_decomposition,
+                                                decomposition_method,
+                                                decomposition_period
+                                            )
                                     else:
-                                        st.info("Please resolve data validation issues above before training.")
+                                        st.warning("Need at least 5 observations for training after data processing.")
                                 else:
-                                    st.info("Please select feature variables to proceed with training.")
+                                    st.info("Please resolve data validation issues above before training.")
                             else:
-                                st.error("No data found in the selected range. Please adjust your selection.")
-                        except Exception as range_error:
-                            st.error(f"Range selection error: {str(range_error)}")
-                            st.info("Try selecting a different range column or check your data format.")
-                    else:
-                        st.info("Please adjust your feature selection to meet the model requirements above.")
-                            
-                except Exception as e:
-                    logger.error(f"Error in {model_name} tab: {str(e)}")
-                    st.error(f"An error occurred: {str(e)}")
-                    st.info("Try refreshing the page or checking your data format.")
+                                st.info("Please select feature variables to proceed with training.")
+                        else:
+                            st.error("No data found in the selected range. Please adjust your selection.")
+                    except Exception as range_error:
+                        st.error(f"Range selection error: {str(range_error)}")
+                        st.info("Try selecting a different range column or check your data format.")
+                else:
+                    st.info("Please adjust your feature selection to meet the model requirements above.")
+                        
+            except Exception as e:
+                logger.error(f"Error in {model_name} tab: {str(e)}")
+                st.error(f"An error occurred: {str(e)}")
+                st.info("Try refreshing the page or checking your data format.")
             else:
                 st.info("Please upload data files using the uploader at the top of the page.")
 

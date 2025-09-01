@@ -17,6 +17,7 @@ from scipy import stats
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from statsmodels.stats.stattools import durbin_watson
+from statsmodels.tsa.seasonal import STL
 
 from config import (
     DURBIN_WATSON_LOWER,
@@ -671,7 +672,7 @@ def display_mlr_metrics(df: pd.DataFrame, target: str, features: List[str], mode
             # Standard MLR analysis
             X = sm.add_constant(df[features])
             y = df[target]
-            model = sm.OLS(y, X).fit()
+            model = sm.OLS(y, X).fit(cov_type='HAC', cov_kwds={'maxlags':1})
 
             st.subheader("Standard MLR Model Diagnostics")
             st.markdown(
@@ -804,7 +805,7 @@ def display_distributed_lag_metrics(df: pd.DataFrame, target: str, features: Lis
     try:
         y = df[target]
         X = sm.add_constant(df[features])
-        dw = durbin_watson(y - sm.OLS(y, X).fit().fittedvalues)
+        dw = durbin_watson(y - sm.OLS(y, X).fit(cov_type='HAC', cov_kwds={'maxlags':1}).fittedvalues)
         
         dw_status = " No autocorrelation" if DURBIN_WATSON_LOWER <= dw <= DURBIN_WATSON_UPPER else " Autocorrelation detected"
         st.markdown(f"**Durbin-Watson:** {dw:.2f} ({dw_status})")
@@ -3216,7 +3217,7 @@ def collect_model_report_data(
                 import statsmodels.api as sm
                 X_sm = sm.add_constant(df[features])
                 y = df[target]
-                ols_model = sm.OLS(y, X_sm).fit()
+                ols_model = sm.OLS(y, X_sm).fit(cov_type='HAC', cov_kwds={'maxlags':1})
                 
                 report["model_diagnostics"] = {
                     "r_squared": float(ols_model.rsquared),
@@ -3226,7 +3227,7 @@ def collect_model_report_data(
                     "aic": float(ols_model.aic),
                     "bic": float(ols_model.bic),
                     "log_likelihood": float(ols_model.llf),
-                    "durbin_watson": float(sm.stats.diagnostic.durbin_watson(ols_model.resid)),
+                    "durbin_watson": float(sm.stats.stattools.durbin_watson(ols_model.resid)),
                     "jarque_bera_test": {
                         "statistic": float(sm.stats.diagnostic.jarque_bera(ols_model.resid)[0]),
                         "p_value": float(sm.stats.diagnostic.jarque_bera(ols_model.resid)[1])
@@ -3262,8 +3263,8 @@ def collect_model_report_data(
                     },
                     "homoscedasticity": "Check residual plots for constant variance",
                     "independence": {
-                        "durbin_watson_statistic": float(sm.stats.diagnostic.durbin_watson(ols_model.resid)),
-                        "autocorrelation_detected": not (1.5 <= sm.stats.diagnostic.durbin_watson(ols_model.resid) <= 2.5)
+                        "durbin_watson_statistic": float(sm.stats.stattools.durbin_watson(ols_model.resid)),
+                        "autocorrelation_detected": not (1.5 <= sm.stats.stattools.durbin_watson(ols_model.resid) <= 2.5)
                     }
                 }
                 
@@ -3372,7 +3373,7 @@ def collect_model_report_data(
                 
                 X = sm.add_constant(df[features])
                 y = df[target]
-                ols_model = sm.OLS(y, X).fit()
+                ols_model = sm.OLS(y, X).fit(cov_type='HAC', cov_kwds={'maxlags':1})
                 
                 dw_stat = durbin_watson(ols_model.resid)
                 
@@ -3821,7 +3822,7 @@ def _calculate_variable_importance(model, X, y, features, model_name):
             # For linear models, use coefficient magnitude and t-statistics
             import statsmodels.api as sm
             X_sm = sm.add_constant(X)
-            ols_model = sm.OLS(y, X_sm).fit()
+            ols_model = sm.OLS(y, X_sm).fit(cov_type='HAC', cov_kwds={'maxlags':1})
             
             coefficients = ols_model.params[1:]  # Exclude intercept
             t_values = ols_model.tvalues[1:]  # Exclude intercept

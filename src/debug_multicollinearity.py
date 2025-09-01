@@ -121,7 +121,7 @@ def debug_integration():
             # Test Durbin-Watson
             import statsmodels.api as sm
             X = sm.add_constant(X)
-            model = sm.OLS(test_data['target'], X).fit()
+            model = sm.OLS(test_data['target'], X).fit(cov_type='HAC', cov_kwds={'maxlags':1})
             dw_stat = durbin_watson(model.resid)
             st.write("Durbin-Watson statistic:", dw_stat)
             

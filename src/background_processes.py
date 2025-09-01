@@ -23,13 +23,23 @@ import streamlit as st
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global registry for background processes
-PROCESSES = {}
-PROCESS_RESULTS = {}
+# Global registry for background processes (now using st.session_state for persistence)
+def _init_process_states():
+    if 'background_processes_data' not in st.session_state:
+        st.session_state['background_processes_data'] = {
+            'processes': {},
+            'results': {}
+        }
+
+def get_processes_state() -> Dict:
+    _init_process_states()
+    return st.session_state['background_processes_data']
 
 
 class BackgroundProcess:
-    """Class for managing a background process with progress tracking."""
+    """
+    Class for managing a background process with progress tracking.
+    """
     
     def __init__(self, name: str, target_func: Callable, args: tuple = None, kwargs: Dict = None):
         """
@@ -76,7 +86,12 @@ class BackgroundProcess:
             try:
                 # Call the target function with progress callback
                 kwargs = self.kwargs.copy()
-                kwargs['progress_callback'] = self.update_progress
+                # Only inject progress_callback if it's not explicitly set to something else
+                if kwargs.get('progress_callback', 1) is None: # Check if it was explicitly set to None
+                    kwargs['progress_callback'] = self.update_progress
+                elif 'progress_callback' not in kwargs: # If not present at all, inject it
+                    kwargs['progress_callback'] = self.update_progress
+
                 self.result = self.target_func(*self.args, **kwargs)
                 self.status = "completed"
                 self.progress = 1.0
@@ -89,7 +104,7 @@ class BackgroundProcess:
             finally:
                 self.end_time = datetime.now()
                 self.add_log(f"Process ended at {self.end_time}")
-                PROCESS_RESULTS[self.id] = self.get_result()
+                get_processes_state()['results'][self.id] = self.get_result()
         
         # Start thread
         self.thread = threading.Thread(target=wrapper)
@@ -97,7 +112,7 @@ class BackgroundProcess:
         self.thread.start()
         
         # Register process
-        PROCESSES[self.id] = self
+        get_processes_state()['processes'][self.id] = self
         
         return True
     
@@ -196,10 +211,10 @@ def get_process_status(process_id: str) -> Dict[str, Any]:
     Returns:
         Process status dictionary
     """
-    if process_id not in PROCESSES:
+    if process_id not in get_processes_state()['processes']:
         return {'error': 'Process not found', 'status': 'unknown'}
     
-    return PROCESSES[process_id].get_status()
+    return get_processes_state()['processes'][process_id].get_status()
 
 
 def get_process_result(process_id: str) -> Dict[str, Any]:
@@ -212,16 +227,16 @@ def get_process_result(process_id: str) -> Dict[str, Any]:
     Returns:
         Process result dictionary
     """
-    if process_id in PROCESS_RESULTS:
-        return PROCESS_RESULTS[process_id]
+    if process_id in get_processes_state()['results']:
+        return get_processes_state()['results'][process_id]
     
-    if process_id not in PROCESSES:
+    if process_id not in get_processes_state()['processes']:
         return {'error': 'Process not found', 'status': 'unknown'}
     
-    if PROCESSES[process_id].status != "completed":
-        return {'error': 'Process not completed', 'status': PROCESSES[process_id].status}
+    if get_processes_state()['processes'][process_id].status != "completed":
+        return {'error': 'Process not completed', 'status': get_processes_state()['processes'][process_id].status}
     
-    return PROCESSES[process_id].get_result()
+    return get_processes_state()['processes'][process_id].get_result()
 
 
 def get_active_processes() -> Dict[str, Dict[str, Any]]:
@@ -232,51 +247,64 @@ def get_active_processes() -> Dict[str, Dict[str, Any]]:
         Dictionary of process statuses
     """
     active_processes = {}
-    for process_id, process in PROCESSES.items():
+    for process_id, process in get_processes_state()['processes'].items():
         if process.is_running():
             active_processes[process_id] = process.get_status()
     
     return active_processes
 
 
-def display_process_ui(process_id: str):
+def display_process_ui(process_id: str, 
+                   title: str = "Background Process Status", 
+                   on_complete_callback: Callable = None, 
+                   result_key: str = None, 
+                   refresh_interval: float = 0.5):
     """
     Display a UI element for tracking process progress.
-    
+
     Args:
         process_id: Process ID
+        title: Title to display for the process UI
+        on_complete_callback: Function to call when process completes successfully
+        result_key: Key to store the result in Streamlit session state
+        refresh_interval: How often to refresh the UI (in seconds)
     """
-    if process_id not in PROCESSES:
+    if process_id not in get_processes_state()['processes']:
         st.error(f"Process {process_id} not found")
         return
-    
-    process = PROCESSES[process_id]
-    
+
+    process = get_processes_state()['processes'][process_id]
+
     # Create a placeholder
     placeholder = st.empty()
-    
+
     # Update status periodically
     with placeholder.container():
         # Display process information
-        st.markdown(f"##### {process.name}")
+        st.markdown(f"##### {title}") # Use the provided title
         
         # Progress bar
         progress_bar = st.progress(0)
         status_text = st.empty()
-        
+
         # Check status until complete or failed
         while process.is_running():
             progress_bar.progress(process.progress)
             status_text.text(process.message)
-            time.sleep(0.1)
-        
+            time.sleep(refresh_interval) # Use the provided refresh interval
+
         # Final update
         if process.is_complete():
             progress_bar.progress(1.0)
             status_text.success(f"✅ {process.name} completed successfully")
+            if on_complete_callback and process.result is not None:
+                # Store result in session state before calling callback
+                if result_key:
+                    st.session_state[result_key] = process.result
+                on_complete_callback(process.result)
         elif process.has_failed():
             status_text.error(f"❌ {process.name} failed: {process.error}")
-        
+
         # Display logs if requested
         if st.checkbox(f"Show logs for {process.name}", key=f"{process.ui_key}_logs"):
             logs_text = "\n".join([
@@ -284,11 +312,11 @@ def display_process_ui(process_id: str):
                 for log in process.logs
             ])
             st.text_area("Process logs", logs_text, height=150)
-        
-        # Display results if completed
+
+        # Display results if completed and no callback was used or if callback didn't display all
         if process.is_complete():
-            if st.checkbox(f"Show results for {process.name}", key=f"{process.ui_key}_results"):
-                st.json(process.get_result())
+            if st.checkbox(f"Show raw results for {process.name}", key=f"{process.ui_key}_raw_results"):
+                st.json(process.get_result()) # Display raw result
 
 
 # Example background process functions
@@ -450,7 +478,7 @@ def autocorrelation_analysis_process(data: pd.DataFrame, target: str, features: 
         y = model_data[target]
         
         # Fit OLS model
-        model = sm.OLS(y, X).fit()
+        model = sm.OLS(y, X).fit(cov_type='HAC', cov_kwds={'maxlags':1})
         
         # Check autocorrelation
         if progress_callback:
@@ -491,51 +519,79 @@ def autocorrelation_analysis_process(data: pd.DataFrame, target: str, features: 
     return result
 
 
-def optimal_model_selection_process(data: pd.DataFrame, target: str, features: List[str], 
-                                 progress_callback: Callable = None) -> Dict[str, Any]:
+def optimal_model_selection_process(data: pd.DataFrame, 
+                                 target: str, 
+                                 features: List[str], 
+                                 progress_callback: Callable = None,
+                                 date_col: str = None, 
+                                 use_decomposition: bool = False, 
+                                 decomposition_method: str = 'STL', 
+                                 decomposition_period: int = None) -> Dict[str, Any]:
     """
     Background process function for optimal model selection.
-    
+
     Args:
         data: DataFrame with target and features
         target: Target column name
         features: Feature column names
         progress_callback: Progress callback function
-    
+        date_col: Date column name (needed for decomposition)
+        use_decomposition: Whether to apply seasonal decomposition
+        decomposition_method: Method for seasonal decomposition
+        decomposition_period: Seasonal period for decomposition
+
     Returns:
         Dictionary with optimal model selection results
     """
     from src.time_series_utils import fit_optimal_model
-    
+
+    logger.info("optimal_model_selection_process: Starting optimal model selection process.")
+
     if progress_callback:
         progress_callback(0.1, "Starting model selection process")
-    
+
     # Run full model selection analysis
     if progress_callback:
         progress_callback(0.3, "Analyzing data characteristics")
     
-    # Fit optimal model
-    if progress_callback:
-        progress_callback(0.5, "Fitting candidate models")
-    
-    result = fit_optimal_model(
-        data, 
-        target_col=target, 
-        feature_cols=features,
-        handle_autocorr=True,
-        handle_multicoll=True
-    )
-    
-    if progress_callback:
-        progress_callback(0.9, "Finalizing model selection")
-    
-    # Add timestamp
-    result['timestamp'] = datetime.now().isoformat()
-    
-    if progress_callback:
-        progress_callback(1.0, "Model selection completed")
-    
-    return result
+    try:
+        # Fit optimal model
+        if progress_callback:
+            progress_callback(0.5, "Fitting candidate models")
+        
+        logger.info(f"optimal_model_selection_process: Calling fit_optimal_model with target={target}, features={features}, date_col={date_col}, use_decomposition={use_decomposition}, method={decomposition_method}, period={decomposition_period}")
+
+        result = fit_optimal_model(
+            data,
+            target_col=target,
+            feature_cols=features,
+            time_col=date_col,
+            handle_autocorr=True,
+            handle_multicoll=True,
+            use_decomposition=use_decomposition,
+            decomposition_method=decomposition_method,
+            decomposition_period=decomposition_period
+        )
+
+        if progress_callback:
+            progress_callback(0.9, "Finalizing model selection")
+        
+        logger.info("optimal_model_selection_process: Optimal model selection completed successfully.")
+
+        # Add timestamp
+        result['timestamp'] = datetime.now().isoformat()
+
+        if progress_callback:
+            progress_callback(1.0, "Model selection completed")
+        
+        return result
+
+    except Exception as e:
+        error_message = f"optimal_model_selection_process: Error during optimal model selection: {str(e)}"
+        logger.error(error_message)
+        if progress_callback:
+            progress_callback(1.0, f"Error: {str(e)}")
+        raise # Re-raise to ensure the BackgroundProcess catches it
 
 
 # UI component for displaying background processes
@@ -556,8 +612,8 @@ def render_background_process_ui():
             st.text(process_status['message'])
             
             # Show logs if available
-            if process_id in PROCESSES:
-                process = PROCESSES[process_id]
+            if process_id in get_processes_state()['processes']:
+                process = get_processes_state()['processes'][process_id]
                 if process.logs:
                     logs_text = "\n".join([
                         f"{log['timestamp'].strftime('%H:%M:%S')} - {log['message']}"
